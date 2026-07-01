@@ -1,0 +1,2950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TS EOD — Disposition Code Report</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --purple: #5000b3;
+  --purple-dark: #3a0082;
+  --purple-light: #7a30d6;
+  --orange: #FF6400;
+  --white: #ffffff;
+  --bg: #f4f3f8;
+  --surface: #ffffff;
+  --border: #e2dff0;
+  --text: #1a1028;
+  --muted: #6b5f82;
+  --success: #1ecb6e;
+  --sidebar-w: 270px;
+  --c1: #5000b3; --c2: #FF6400; --c3: #00b4d8; --c4: #f72585; --c5: #2dc653;
+}
+
+body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ── HEADER ── */
+header {
+  background: linear-gradient(135deg, var(--purple-dark) 0%, var(--purple) 60%, var(--purple-light) 100%);
+  padding: 0 24px;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  box-shadow: 0 4px 20px rgba(80,0,179,0.3);
+  position: sticky; top: 0; z-index: 100;
+  flex-shrink: 0;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo-badge {
+  width: 36px; height: 36px; border-radius: 8px; background: var(--orange);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 14px; color: white; letter-spacing: -1px; flex-shrink: 0;
+}
+.header-title h1 { font-size: 15px; font-weight: 700; color: white; letter-spacing: -0.2px; }
+.header-title p { font-size: 11px; color: rgba(255,255,255,0.6); margin-top: 1px; }
+.header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.header-reset-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+  color: white; border-radius: 8px; padding: 7px 14px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: background .15s; white-space: nowrap;
+}
+.header-reset-btn:hover { background: rgba(255,255,255,0.25); }
+
+.header-badge {
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
+  color: white; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.8px; text-transform: uppercase;
+}
+
+/* ── APP SHELL ── */
+.app-shell { display: flex; flex: 1; min-height: 0; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  height: calc(100vh - 56px);
+  position: sticky; top: 56px;
+  overflow-y: auto;
+}
+.sb-section { padding: 18px 16px; border-bottom: 1px solid var(--border); }
+.sb-label {
+  font-size: 11px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.sb-label::after { content:''; flex:1; height:1px; background: var(--border); }
+
+/* Upload card in sidebar */
+.up-card {
+  border: 2px dashed var(--border); border-radius: 10px;
+  padding: 16px 12px; text-align: center; cursor: pointer;
+  transition: border-color .2s, background .2s; position: relative;
+  background: var(--bg);
+}
+.up-card:hover, .up-card.drag-over { border-color: var(--purple); background: #f3efff; }
+.up-card input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.up-icon {
+  width: 36px; height: 36px; background: linear-gradient(135deg, var(--purple), var(--purple-light));
+  border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px;
+}
+.up-icon svg { width: 18px; height: 18px; fill: white; }
+.up-card h3 { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+.up-card p { font-size: 10px; color: var(--muted); line-height: 1.4; }
+.up-card.loaded { border-color: var(--success); border-style: solid; background: #f0fdf4; }
+.up-card.loaded .up-icon { background: var(--success); }
+.file-name { font-size: 10px; color: var(--success); font-weight: 700; margin-top: 6px; word-break: break-all; }
+
+/* Meta pills in sidebar */
+.meta-pill-sb {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 11px;
+}
+.meta-pill-sb:last-child { border-bottom: none; }
+.meta-pill-sb .mk { color: var(--muted); font-weight: 500; }
+.meta-pill-sb .mv { color: var(--text); font-weight: 700; }
+
+/* Week select */
+.sb-select {
+  width: 100%; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 13px; font-weight: 600; color: var(--text);
+  background: white; cursor: pointer; outline: none; font-family: inherit;
+}
+.sb-select:focus { border-color: var(--purple); }
+
+/* Trend anchor chips */
+.chip-grid { display: flex; flex-direction: column; gap: 4px; }
+.day-chip {
+  padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); font-size: 11px; font-weight: 600; cursor: pointer;
+  color: var(--muted); transition: all .15s; user-select: none;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.day-chip.active { background: var(--purple); color: white; border-color: var(--purple); }
+.day-chip:hover:not(.active) { border-color: var(--purple); color: var(--purple); }
+.day-chip .chip-vol { font-size: 10px; opacity: .7; }
+
+/* Action buttons */
+.sb-spacer { flex: 1; }
+.action-section { padding: 16px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); }
+.action-section .sb-label { margin-bottom: 8px; }
+.act-btn {
+  width: 100%; border: none; border-radius: 9px; padding: 10px 14px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all .15s; font-family: inherit;
+}
+.act-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.act-btn.primary { background: var(--purple); color: white; }
+.act-btn.primary:hover { background: var(--purple-dark); }
+.act-btn.secondary { background: var(--orange); color: white; }
+.act-btn.secondary:hover { background: #d95500; }
+.act-btn.ghost { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.act-btn.ghost:hover { border-color: var(--purple); color: var(--purple); }
+.act-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── MAIN WORKSPACE ── */
+.workspace {
+  flex: 1; overflow-y: auto; padding: 24px 24px 60px;
+  box-sizing: border-box; min-width: 0;
+}
+
+/* ── REPORT STYLES (Phones EOD layout) ── */
+.rpt-header {
+  background: var(--purple);
+  padding: 16px 22px 14px;
+  margin-bottom: 0;
+}
+.rpt-header-inner {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
+.rpt-title {
+  font-size: 20px; font-weight: 800; color: white; letter-spacing: -0.3px; margin-bottom: 10px;
+}
+.rpt-title-accent { color: var(--orange); }
+.rpt-gen {
+  font-size: 10px; color: rgba(255,255,255,0.5); font-weight: 500;
+  white-space: nowrap; padding-top: 4px; flex-shrink: 0;
+}
+.rpt-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.rpt-badge {
+  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3);
+  color: white; padding: 4px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.2px;
+}
+
+.rpt-body {
+  background: var(--bg);
+  padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  border-radius: 0 0 14px 14px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* Section card */
+.rpt-section-card {
+  background: var(--surface); border-radius: 12px;
+  border: 1px solid var(--border); padding: 12px 14px;
+  box-sizing: border-box; min-width: 0; overflow: hidden;
+}
+.rpt-section-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 14px;
+}
+.rpt-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.rpt-dot.purple { background: var(--purple); }
+.rpt-dot.orange { background: var(--orange); }
+.rpt-section-label {
+  font-size: 13px; font-weight: 700; color: var(--text); flex: 1;
+}
+.rpt-type-badge {
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+}
+.rpt-type-badge.purple { background: #f0ebff; color: var(--purple); }
+.rpt-type-badge.orange { background: #fff4ee; color: var(--orange); }
+
+/* KPI cards row */
+.rpt-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.rpt-kpi-card {
+  flex: 1 1 130px;
+  max-width: 200px;
+  border-radius: 8px;
+  padding: 10px 12px 10px 14px;
+  background: var(--surface);
+  border-left: 3px solid transparent;
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.rpt-kpi-card.bordered-purple { border-left-color: var(--purple); }
+.rpt-kpi-card.bordered-orange { border-left-color: var(--orange); }
+.rpt-kpi-card.highlighted-orange { background: #fff9f5; }
+.rpt-kpi-label {
+  font-size: 11px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;
+  line-height: 1.3;
+}
+.rpt-kpi-val {
+  font-size: 22px; font-weight: 800; color: var(--purple); line-height: 1;
+}
+.rpt-kpi-val.orange { color: var(--orange); }
+.rpt-kpi-val.sm-small { font-size: 18px; }
+.rpt-kpi-val.empty-dash {
+  font-size: 14px; font-weight: 700;
+  color: var(--border);
+  display: inline-block;
+  width: 24px; height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  vertical-align: middle;
+  line-height: 0;
+  margin-top: 4px;
+}
+.rpt-kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; font-weight: 500; }
+
+.kpi-empty-bar {
+  display: block;
+  width: 28px; height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 6px;
+}
+
+/* Subsection label */
+.rpt-subsection-label {
+  font-size: 11px; font-weight: 800; color: var(--orange);
+  text-transform: uppercase; letter-spacing: 1px;
+  padding: 4px 10px; background: #fff4ee; border: 1px solid #ffd0b0;
+  border-radius: 6px; display: inline-block; margin-bottom: 10px;
+}
+
+/* 2-col layout for Attendance + Overtime */
+.rpt-2col-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 700px) { .rpt-2col-row { grid-template-columns: 1fr; } }
+
+/* Tables inside sections */
+.rpt-table { width: 100%; border-collapse: collapse; }
+.rpt-table th {
+  font-size: 9px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 6px 8px; text-align: center; white-space: nowrap;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+}
+.rpt-table th:first-child { text-align: left; }
+.rpt-table td {
+  padding: 6px 8px; font-size: 12px; font-weight: 600;
+  text-align: center; border-bottom: 1px solid var(--border); color: var(--text);
+}
+.rpt-table td:first-child { text-align: left; font-size: 12px; }
+.rpt-table tr:last-child td { border-bottom: none; }
+.rpt-table tr:hover td { background: #f9f7ff; }
+.rpt-total-row td {
+  background: linear-gradient(135deg,#f0ebff,#e8e0ff) !important;
+  font-weight: 800 !important; color: var(--purple-dark) !important;
+  font-size: 12px;
+}
+
+/* Top5 + Trend split row */
+.top5-trend-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  min-height: 360px;
+}
+.top5-col {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.trend-col {
+  display: flex; flex-direction: column; min-width: 0;
+}
+.trend-col .chart-wrap {
+  flex: 1;
+  min-height: 260px;
+  position: relative;
+}
+.trend-col .chart-padding {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 14px 14px;
+  min-height: 0;
+}
+
+/* Vertical top5 list */
+.top5-vert {
+  display: flex; flex-direction: column;
+  gap: 6px; flex: 1; padding: 8px 10px; overflow-y: auto;
+}
+.top5-vert .top5-card {
+  border-radius: 8px; padding: 10px 10px 8px;
+  flex-shrink: 0;
+}
+.top5-vert .top5-card .count { font-size: 18px; }
+.top5-vert .top5-card .label { font-size: 10px; line-height: 1.3; }
+.top5-vert .top5-card .rank-badge { width: 20px; height: 20px; font-size: 10px; border-radius: 4px; top: 8px; right: 8px; }
+.top5-vert .top5-card .accent-bar { margin-bottom: 8px; }
+.top5-vert .top5-card .pct-text { font-size: 11px; }
+
+/* Disposition top5 inside section card */
+.rpt-section-card .top5-grid { margin-bottom: 0; }
+
+/* Chart inside section card */
+.rpt-section-card .chart-wrap { height: 240px; margin-top: 8px; }
+
+/* Hide old wrapper elements that no longer apply */
+.report-header-bar, .gen-badge.old,
+.att-card, .sms-metrics-card, .chart-card, .table-card { display: none !important; }
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 60vh; gap: 14px; color: var(--muted);
+}
+.empty-state .big-icon {
+  width: 72px; height: 72px; border-radius: 20px;
+  background: linear-gradient(135deg, var(--purple), var(--purple-light));
+  display: flex; align-items: center; justify-content: center; opacity: .25;
+}
+.empty-state .big-icon svg { width: 36px; height: 36px; fill: white; }
+.empty-state h2 { font-size: 16px; font-weight: 700; color: var(--text); opacity: .4; }
+.empty-state p { font-size: 13px; opacity: .5; }
+
+.act-btn.success-btn { background: #1ecb6e; color: white; }
+.act-btn.error-btn   { background: #e63946; color: white; }
+
+.save-day-date {
+  font-size: 11px; font-weight: 700; color: var(--purple);
+  background: #f0ebff; border: 1px solid #d0c4f0;
+  border-radius: 6px; padding: 6px 10px; text-align: center;
+}
+.saved-days-list { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.saved-day-pill {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 8px; font-size: 10px; font-weight: 600; color: var(--text);
+}
+.saved-day-pill .sdp-date { color: var(--purple); }
+.saved-day-pill .sdp-del {
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 13px; line-height: 1; padding: 0 2px;
+  transition: color .15s;
+}
+.saved-day-pill .sdp-del:hover { color: #e63946; }
+.saved-day-pill .sdp-load {
+  background: none; border: none; cursor: pointer; color: var(--purple);
+  font-size: 10px; font-weight: 700; padding: 0; text-decoration: underline;
+}
+
+/* Export bar above capture zone */
+.rpt-export-bar {
+  display: flex; justify-content: flex-end;
+  padding: 10px 0 6px;
+}
+.rpt-export-wrap { position: relative; }
+.rpt-export-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--purple); color: white;
+  border: none; border-radius: 8px; padding: 8px 14px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: background .15s;
+}
+.rpt-export-btn:hover { background: var(--purple-dark); }
+.rpt-export-menu {
+  display: none;
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: white; border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  min-width: 190px; z-index: 500; overflow: hidden;
+  animation: menuPop .15s ease;
+}
+.rpt-export-menu.open { display: block; }
+@keyframes menuPop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rpt-export-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 11px 16px;
+  background: none; border: none; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--text);
+  font-family: inherit; text-align: left; transition: background .1s;
+}
+.rpt-export-item:hover { background: #f4f3f8; color: var(--purple); }
+.rpt-export-item + .rpt-export-item { border-top: 1px solid var(--border); }
+
+/* Report area */
+#reportArea { display: none; }
+#reportArea.visible { display: block; }
+
+/* Report capture zone */
+/* Report footer (inside capture) */
+.capture-footer {
+  text-align: center; font-size: 11px; font-weight: 500;
+  color: var(--muted); padding: 14px 20px 16px;
+  border-top: 1px solid var(--border); margin: 4px 16px 0;
+  letter-spacing: 0.2px;
+  box-sizing: border-box;
+}
+
+#captureZone {
+  background: var(--bg);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Report header bar */
+.report-header-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 8px;
+}
+.report-header-bar h2 { font-size: 16px; font-weight: 800; color: var(--text); }
+.report-header-bar p { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.gen-badge {
+  font-size: 12px; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-weight: 600;
+}
+
+/* Section title */
+.section-title {
+  font-size: 12px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1.2px;
+  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* Total strip */
+.total-strip { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.total-tile {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 18px; flex: 1; min-width: 140px;
+}
+.total-tile .t-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.total-tile .t-val { font-size: 26px; font-weight: 800; color: var(--purple); line-height: 1; }
+.total-tile .t-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+/* Top 5 grid */
+.top5-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 0;
+}
+@media (max-width: 1000px) { .top5-grid { grid-template-columns: repeat(3,1fr); } }
+
+.top5-card {
+  background: var(--surface); border-radius: 12px; padding: 16px 14px 14px;
+  border: 1px solid var(--border); position: relative; overflow: hidden; transition: box-shadow .2s;
+}
+.top5-card:hover { box-shadow: 0 4px 20px rgba(80,0,179,.1); }
+.top5-card .rank-badge {
+  position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: white;
+}
+.top5-card:nth-child(1) .rank-badge { background: var(--c1); }
+.top5-card:nth-child(2) .rank-badge { background: var(--c2); }
+.top5-card:nth-child(3) .rank-badge { background: var(--c3); }
+.top5-card:nth-child(4) .rank-badge { background: var(--c4); }
+.top5-card:nth-child(5) .rank-badge { background: var(--c5); }
+.top5-card .accent-bar { height: 3px; border-radius: 2px; margin-bottom: 12px; }
+.top5-card:nth-child(1) .accent-bar { background: var(--c1); }
+.top5-card:nth-child(2) .accent-bar { background: var(--c2); }
+.top5-card:nth-child(3) .accent-bar { background: var(--c3); }
+.top5-card:nth-child(4) .accent-bar { background: var(--c4); }
+.top5-card:nth-child(5) .accent-bar { background: var(--c5); }
+.top5-card .count { font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 5px; }
+.top5-card:nth-child(1) .count { color: var(--c1); }
+.top5-card:nth-child(2) .count { color: var(--c2); }
+.top5-card:nth-child(3) .count { color: var(--c3); }
+.top5-card:nth-child(4) .count { color: var(--c4); }
+.top5-card:nth-child(5) .count { color: var(--c5); }
+.top5-card .label { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.35; margin-bottom: 10px; }
+.top5-card .pct-row { display: flex; align-items: center; gap: 5px; }
+.pct-bar-wrap { flex: 1; height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; }
+.pct-bar { height: 100%; border-radius: 2px; }
+.top5-card:nth-child(1) .pct-bar { background: var(--c1); }
+.top5-card:nth-child(2) .pct-bar { background: var(--c2); }
+.top5-card:nth-child(3) .pct-bar { background: var(--c3); }
+.top5-card:nth-child(4) .pct-bar { background: var(--c4); }
+.top5-card:nth-child(5) .pct-bar { background: var(--c5); }
+.pct-text { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+
+/* Chart card */
+.chart-card {
+  background: var(--surface); border-radius: 14px; border: 1px solid var(--border);
+  padding: 20px; margin-bottom: 20px;
+}
+.chart-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+.chart-header h3 { font-size: 14px; font-weight: 700; }
+.chart-header p { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 8px; }
+.legend-item { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; color: var(--muted); }
+.legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.chart-wrap { position: relative; height: 280px; }
+
+/* Table card */
+.table-card {
+  background: var(--surface); border-radius: 14px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 20px;
+}
+.table-header-row { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.table-header-row h3 { font-size: 13px; font-weight: 700; }
+.table-header-row p { font-size: 11px; color: var(--muted); margin-top: 2px; }
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: var(--bg); }
+#summaryTable thead th, #summaryTable tbody td { padding: 9px 14px; }
+#summaryTable thead th {
+  text-align: left; font-size: 13px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 1px solid var(--border);
+}
+#summaryTable thead th:not(:first-child) { text-align: right; }
+#summaryTable tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+#summaryTable tbody tr:last-child { border-bottom: none; }
+#summaryTable tbody tr:hover { background: #f9f7ff; }
+#summaryTable tbody td { font-size: 13px; vertical-align: middle; }
+#summaryTable tbody td:not(:first-child) { text-align: right; font-weight: 700; }
+.code-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; }
+.code-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.rank-num { font-size: 12px; font-weight: 800; color: var(--muted); }
+
+.time-input-pair { display: flex; gap: 6px; }
+.time-field { display: flex; align-items: center; gap: 4px; flex: 1; }
+.time-field .sb-input.time-inp { text-align: center; padding: 7px 6px; }
+.time-unit { font-size: 11px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+
+/* Attendance table in sidebar */
+.att-header-row, .att-row {
+  display: grid;
+  grid-template-columns: 58px repeat(4, 1fr);
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.att-header-row { margin-bottom: 5px; }
+.att-group-th { /* empty corner */ }
+.att-col-th {
+  font-size: 8px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
+}
+.att-group-label {
+  font-size: 10px; font-weight: 700; color: var(--text);
+  white-space: nowrap; padding-right: 2px;
+}
+.sb-input.att-inp {
+  padding: 5px 4px; font-size: 11px; text-align: center;
+  -moz-appearance: textfield;
+}
+.sb-input.att-inp::-webkit-outer-spin-button,
+.sb-input.att-inp::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Attendance card in report */
+.att-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px; margin-bottom: 20px;
+}
+.att-report-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.att-report-table th {
+  font-size: 11px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  padding: 6px 12px; text-align: center;
+  border-bottom: 1px solid var(--border); background: var(--bg);
+}
+.att-report-table th:first-child { text-align: left; }
+.att-report-table td {
+  padding: 9px 12px; font-size: 12px; font-weight: 700;
+  text-align: center; border-bottom: 1px solid var(--border);
+}
+.att-report-table td:first-child {
+  text-align: left; font-size: 11px; font-weight: 700; color: var(--text);
+}
+.att-report-table tr:last-child td { border-bottom: none; }
+.att-report-table tr:hover td { background: #f9f7ff; }
+.att-report-table .total-row td {
+  background: linear-gradient(135deg,#f0ebff,#e8e0ff);
+  font-weight: 800; color: var(--purple-dark);
+  border-top: 2px solid #cfc3f0; border-bottom: none;
+}
+.att-report-table .total-row td:first-child { border-radius: 0 0 0 10px; }
+.att-report-table .total-row td:last-child { border-radius: 0 0 10px 0; }
+.att-val { color: var(--purple); }
+.att-val.empty { color: #ccc; font-weight: 400; }
+
+/* Overtime table in sidebar */
+.ot-header-row, .ot-row {
+  display: grid;
+  grid-template-columns: 58px repeat(3, 1fr);
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.ot-header-row { margin-bottom: 5px; }
+.ot-group-th { }
+.ot-col-th {
+  font-size: 8px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
+}
+.ot-group-label {
+  font-size: 10px; font-weight: 700; color: var(--text);
+  white-space: nowrap; padding-right: 2px;
+}
+.sb-input.ot-inp {
+  padding: 5px 4px; font-size: 11px; text-align: center;
+  -moz-appearance: textfield;
+}
+.sb-input.ot-inp::-webkit-outer-spin-button,
+.sb-input.ot-inp::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* 2-col input pair */
+.sb-input-2col {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;
+}
+.sb-input-2col .sb-input-row { margin-bottom: 0; }
+
+/* SMS input fields */
+.sb-input-row {
+  display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px;
+}
+.sb-input-row:last-child { margin-bottom: 0; }
+.sb-input-row label {
+  font-size: 9px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.8px;
+}
+.sb-input {
+  width: 100%; border: 1px solid var(--border); border-radius: 7px;
+  padding: 7px 10px; font-size: 12px; font-weight: 600; color: var(--text);
+  background: var(--bg); outline: none; font-family: inherit; transition: border-color .15s;
+}
+.sb-input:focus { border-color: var(--purple); background: white; }
+.sb-input::placeholder { color: #bbb; font-weight: 400; }
+
+.sms-metrics-grid-sm {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+}
+.sms-metric-tile.sm { padding: 10px 14px; }
+.sm-val.sm-small { font-size: 16px; }
+.sm-val.sm-small.empty { font-size: 14px; }
+
+.sp-hours-group { margin-top: 10px; }
+.sp-hours-label {
+  font-size: 9px; font-weight: 800; color: var(--purple);
+  text-transform: uppercase; letter-spacing: 1px;
+  margin-bottom: 8px; padding: 5px 10px;
+  background: linear-gradient(135deg,#f0ebff,#e8e0ff);
+  border-radius: 6px; border: 1px solid #cfc3f0;
+  display: inline-block;
+}
+
+/* SLA sidebar styles */
+.sla-divider {
+  display: flex; align-items: center; gap: 8px;
+  margin: 10px 0 8px; font-size: 9px; font-weight: 800;
+  color: var(--orange); text-transform: uppercase; letter-spacing: 1px;
+}
+.sla-divider::before, .sla-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.sla-total-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg,#fff4ee,#ffe8d6);
+  border: 1px solid #ffd0b0; border-radius: 7px;
+  padding: 6px 10px; margin-top: 6px;
+}
+.sla-total-label { font-size: 11px; font-weight: 800; color: var(--orange); text-transform: uppercase; letter-spacing: 0.8px; }
+.sla-total-val { font-size: 14px; font-weight: 800; color: var(--orange); }
+
+/* SLA report total row */
+.sla-report-total {
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg,#fff4ee,#ffe8d6);
+  border: 1px solid #ffd0b0; border-radius: 8px;
+  padding: 10px 14px; margin-top: 10px;
+}
+.sla-report-total-label { font-size: 10px; font-weight: 700; color: var(--orange); }
+.sla-report-total-val { font-size: 18px; font-weight: 800; color: var(--orange); }
+
+/* SMS metrics card in report */
+.sms-metrics-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px; margin-bottom: 20px;
+}
+.sms-metrics-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+.sms-metrics-grid-sm {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+}
+.sms-metric-tile {
+  background: var(--bg); border-radius: 10px; padding: 14px 16px;
+  border: 1px solid var(--border);
+}
+.sms-metric-tile.sm { padding: 10px 14px; }
+.sms-metric-tile .sm-label {
+  font-size: 11px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;
+}
+.sms-metric-tile .sm-val {
+  font-size: 22px; font-weight: 800; color: var(--purple); line-height: 1;
+}
+.sm-val.sm-small { font-size: 16px; }
+.sm-val.empty { color: #ccc; font-weight: 500; }
+.sm-val.sm-small.empty { font-size: 14px; }
+.sms-metric-tile.highlight {
+  background: linear-gradient(135deg,#f0ebff,#e8e0ff);
+  border-color: #cfc3f0;
+}
+.sms-metric-tile.highlight .sm-val { color: var(--purple-dark); }
+/* Group KPI Summary Strip */
+.group-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 0;
+}
+@media (max-width: 900px) { .group-kpi-strip { grid-template-columns: repeat(3,1fr); } }
+.group-kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.group-kpi-header {
+  display: flex; align-items: center; gap: 5px;
+  margin-bottom: 8px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.group-kpi-title {
+  font-size: 11px; font-weight: 800; color: var(--text); letter-spacing: -0.2px; white-space: nowrap;
+}
+.group-kpi-rows { display: flex; flex-direction: column; gap: 5px; }
+.group-kpi-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.gk-label {
+  font-size: 9px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.gk-val {
+  font-size: 13px; font-weight: 800; line-height: 1;
+}
+.gk-val.purple { color: var(--purple); }
+.gk-val.orange { color: var(--orange); }
+.gk-val.muted  { color: var(--muted); font-weight: 600; }
+.gk-val.empty  { color: #ccc; font-weight: 400; font-size: 14px; }
+
+.top5-ind { margin: 2px 0 6px; font-size: 10px; font-weight: 700; }
+.top5-ind .ind-up  { color: #1ecb6e; }
+.top5-ind .ind-dn  { color: #e63946; }
+.top5-ind .ind-same{ color: var(--muted); }
+
+/* Comparison indicators */
+.ind-up  { font-size: 10px; font-weight: 700; color: #1ecb6e; display: inline-block; }
+.ind-dn  { font-size: 10px; font-weight: 700; color: #e63946; display: inline-block; }
+.ind-same{ font-size: 10px; font-weight: 600; color: var(--muted); display: inline-block; }
+.gk-ind  { display: inline; font-size: 10px; font-weight: 700; margin-left: 4px; }
+.gk-ind .ind-up  { font-size: 10px; }
+.gk-ind .ind-dn  { font-size: 10px; }
+.gk-ind .ind-same{ font-size: 10px; }
+
+/* Auto-Analysis bar */
+.analysis-bar {
+  margin: 0 16px 8px;
+  box-sizing: border-box;
+}
+.analysis-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.analysis-title-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.analysis-title {
+  font-size: 13px; font-weight: 800; color: var(--text);
+}
+.analysis-hint {
+  font-size: 10px; color: var(--muted); font-weight: 500;
+}
+.analysis-gen-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--purple); color: white;
+  border: none; border-radius: 8px; padding: 7px 14px;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: background .15s;
+}
+.analysis-gen-btn:hover { background: #3a0080; }
+.analysis-gen-btn:disabled { background: #b0a0d0; cursor: not-allowed; }
+.analysis-body {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 20px;
+  font-size: 14px; line-height: 1.8; color: var(--text);
+  min-height: 100px; outline: none;
+  transition: border-color .15s;
+}
+.analysis-body:focus { border-color: var(--purple); }
+.analysis-body p { margin: 0 0 8px; }
+.analysis-body p:last-child { margin-bottom: 0; }
+.analysis-placeholder { color: var(--muted); font-style: italic; }
+.analysis-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px;
+}
+.analysis-footer-note {
+  font-size: 10px; color: var(--muted); font-weight: 500;
+}
+
+.subject-line-bar {
+  margin-top: 16px; padding: 0 0 24px;
+}
+.subject-line-meta {
+  font-size: 11px; color: var(--muted); text-align: center;
+  margin-bottom: 10px; font-weight: 500;
+}
+.subject-line-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 20px;
+}
+.subject-line-label {
+  font-size: 12px; font-weight: 700; color: var(--text);
+  margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;
+}
+.subject-line-hint { font-size: 10px; font-weight: 400; color: var(--muted); }
+.subject-line-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px;
+}
+.subject-line-text {
+  flex: 1; font-size: 13px; font-weight: 500; color: var(--text);
+}
+.subject-copy-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--orange); color: white;
+  border: none; border-radius: 7px; padding: 7px 14px;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: background .15s; white-space: nowrap; flex-shrink: 0;
+}
+.subject-copy-btn:hover { background: #d95500; }
+
+.toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 999;
+  background: var(--text); color: white; border-radius: 10px;
+  padding: 12px 18px; font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+  transform: translateY(80px); opacity: 0; transition: all .3s; pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast svg { width: 16px; height: 16px; fill: var(--success); flex-shrink: 0; }
+
+/* Spinner overlay */
+.spinner-overlay {
+  position: fixed; inset: 0; z-index: 999; background: rgba(26,16,40,.5);
+  display: none; align-items: center; justify-content: center;
+}
+.spinner-overlay.show { display: flex; }
+.spinner {
+  width: 44px; height: 44px; border: 4px solid rgba(255,255,255,.2);
+  border-top-color: white; border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo-badge">DI</div>
+    <div class="header-title">
+      <h1>Tenant Support — End of Day Report</h1>
+      <p>Workforce Management · EOD Analysis</p>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="rpt-export-wrap">
+      <button class="header-reset-btn" id="rptExportBtn" onclick="toggleExportMenu()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+        Export
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+      </button>
+      <div class="rpt-export-menu" id="rptExportMenu">
+        <button class="rpt-export-item" id="rptCopyBtn">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy as Image
+        </button>
+        <button class="rpt-export-item" id="rptDownloadBtn">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+          Download as PNG
+        </button>
+        <button class="rpt-export-item" onclick="exportCSV();toggleExportMenu();">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 11h8v2H8zm0 4h8v2H8z"/></svg>
+          Export CSV
+        </button>
+      </div>
+    </div>
+    <button class="header-reset-btn" id="resetBtnHeader">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      Reset
+    </button>
+  </div>
+</header>
+
+<div class="app-shell">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+
+    <!-- Apps Script Settings (hidden — URL hardcoded) -->
+    <div class="sb-section" id="gasSection" style="display:none;">
+      <div class="sb-label">Google Sheets Config</div>
+      <div class="sb-input-row">
+        <label for="gasUrlInput">Apps Script URL</label>
+        <input class="sb-input" id="gasUrlInput" type="url" placeholder="https://script.google.com/…"
+          style="font-size:9px;" value="">
+      </div>
+      <button class="act-btn ghost" id="gasUrlSave" style="width:100%;margin-top:6px;font-size:11px;padding:7px;">
+        Set URL &amp; Connect
+      </button>
+      <div id="gasStatus" style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center;"></div>
+    </div>
+
+    <!-- Upload -->
+    <div class="sb-section">
+      <div class="sb-label">Data Source</div>
+      <div class="up-card" id="dropZone">
+        <input type="file" id="csvInput" accept=".csv" />
+        <div class="up-icon">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
+        </div>
+        <h3>Upload CSV</h3>
+        <p>Disposition Code export<br>SMS rows auto-filtered</p>
+        <div class="file-name" id="fileName"></div>
+      </div>
+    </div>
+
+    <!-- Report Date -->
+    <div class="sb-section">
+      <div class="sb-label">Report Date</div>
+      <div class="sb-input-row">
+        <label for="reportDate">Date</label>
+        <input class="sb-input" id="reportDate" type="date" oninput="updateReportDate()" style="cursor:pointer;">
+      </div>
+    </div>
+
+    <!-- File meta (hidden - internal only) -->
+    <div class="sb-section" id="metaSection" style="display:none!important;">
+      <div class="sb-label">File Summary</div>
+      <div class="meta-pill-sb"><span class="mk">SMS Rows</span><span class="mv" id="mSms">—</span></div>
+      <div class="meta-pill-sb"><span class="mk">Total Rows</span><span class="mv" id="mTotal">—</span></div>
+      <div class="meta-pill-sb"><span class="mk">Date Range</span><span class="mv" id="mRange">—</span></div>
+    </div>
+
+    <!-- Week selector -->
+    <div class="sb-section" id="weekSection" style="display:none;">
+      <div class="sb-label">Week</div>
+      <select class="sb-select" id="weekSelect"><option value="">Loading…</option></select>
+    </div>
+
+    <!-- Trend anchor chips -->
+    <div class="sb-section" id="chipSection" style="display:none;">
+      <div class="sb-label">Trend Anchor</div>
+      <div class="chip-grid" id="dateChips"></div>
+    </div>
+
+    <!-- Attendance Count -->
+    <div class="sb-section" id="attendanceSection">
+      <div class="sb-label">Attendance</div>
+
+      <!-- Header row -->
+      <div class="att-header-row">
+        <span class="att-group-th"></span>
+        <span class="att-col-th">Present</span>
+        <span class="att-col-th">Expected</span>
+        <span class="att-col-th">Leave</span>
+        <span class="att-col-th">Rest Day</span>
+      </div>
+
+      <!-- SMS row -->
+      <div class="att-row">
+        <span class="att-group-label">SMS</span>
+        <input class="sb-input att-inp" id="attSmsPres" type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attSmsExp"  type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attSmsLeave" type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attSmsRest" type="number" min="0" placeholder="0" oninput="updateAttendance()">
+      </div>
+
+      <!-- Email row -->
+      <div class="att-row">
+        <span class="att-group-label">Email</span>
+        <input class="sb-input att-inp" id="attEmailPres"  type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attEmailExp"   type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attEmailLeave" type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attEmailRest"  type="number" min="0" placeholder="0" oninput="updateAttendance()">
+      </div>
+
+      <!-- Special Task row -->
+      <div class="att-row">
+        <span class="att-group-label">Spec. Task</span>
+        <input class="sb-input att-inp" id="attSpPres"  type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attSpExp"   type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attSpLeave" type="number" min="0" placeholder="0" oninput="updateAttendance()">
+        <input class="sb-input att-inp" id="attSpRest"  type="number" min="0" placeholder="0" oninput="updateAttendance()">
+      </div>
+    </div>
+
+    <!-- SMS Metrics Inputs -->
+    <div class="sb-section" id="smsSection">
+      <div class="sb-label">SMS Metrics</div>
+      <div class="sb-input-2col">
+        <div class="sb-input-row">
+          <label for="smsReceived">Received</label>
+          <input class="sb-input" id="smsReceived" type="number" min="0" placeholder="0">
+        </div>
+        <div class="sb-input-row">
+          <label for="smsResolved">Resolved</label>
+          <input class="sb-input" id="smsResolved" type="number" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="sb-input-2col">
+        <div class="sb-input-row">
+          <label for="smsRemaining">Remaining</label>
+          <input class="sb-input" id="smsRemaining" type="number" min="0" placeholder="0">
+        </div>
+        <div class="sb-input-row">
+          <label for="smsAssigned">Assigned</label>
+          <input class="sb-input" id="smsAssigned" type="number" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="sb-input-row">
+        <label>First Response Time</label>
+        <div class="time-input-pair">
+          <div class="time-field">
+            <input class="sb-input time-inp" id="smsFRTm" type="number" min="0" max="999" placeholder="0">
+            <span class="time-unit">m</span>
+          </div>
+          <div class="time-field">
+            <input class="sb-input time-inp" id="smsFRTs" type="number" min="0" max="59" placeholder="0">
+            <span class="time-unit">s</span>
+          </div>
+        </div>
+      </div>
+      <div class="sb-input-row">
+        <label>Total Resolved Time</label>
+        <div class="time-input-pair">
+          <div class="time-field">
+            <input class="sb-input time-inp" id="smsTRTm" type="number" min="0" max="999" placeholder="0">
+            <span class="time-unit">m</span>
+          </div>
+          <div class="time-field">
+            <input class="sb-input time-inp" id="smsTRTs" type="number" min="0" max="59" placeholder="0">
+            <span class="time-unit">s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email Metrics Inputs -->
+    <div class="sb-section" id="emailSection">
+      <div class="sb-label">Email Metrics</div>
+      <div class="sb-input-2col">
+        <div class="sb-input-row">
+          <label for="emailBacklog">Opening Backlog</label>
+          <input class="sb-input" id="emailBacklog" type="number" min="0" placeholder="0">
+        </div>
+        <div class="sb-input-row">
+          <label for="emailClosed">Closed</label>
+          <input class="sb-input" id="emailClosed" type="number" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="sb-input-2col">
+        <div class="sb-input-row">
+          <label for="emailRemaining">Remaining</label>
+          <input class="sb-input" id="emailRemaining" type="number" min="0" placeholder="0">
+        </div>
+        <div class="sb-input-row">
+          <label for="emailPending">Pending</label>
+          <input class="sb-input" id="emailPending" type="number" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="sb-input-row">
+        <label for="emailTickets">Tickets Handled</label>
+        <input class="sb-input" id="emailTickets" type="number" min="0" placeholder="0">
+      </div>
+      <div class="sla-divider"><span>Service Level Agreement</span></div>
+      <div class="sb-input-row">
+        <label for="emailSLApct">SLA %</label>
+        <input class="sb-input" id="emailSLApct" type="number" min="0" max="100" step="0.1" placeholder="0.0">
+      </div>
+      <div class="sb-input-2col">
+        <div class="sb-input-row">
+          <label for="emailBreached">Breached SLA</label>
+          <input class="sb-input" id="emailBreached" type="number" min="0" placeholder="0" oninput="updateSlaTotalLive()">
+        </div>
+        <div class="sb-input-row">
+          <label for="emailAchieved">Achieved SLA</label>
+          <input class="sb-input" id="emailAchieved" type="number" min="0" placeholder="0" oninput="updateSlaTotalLive()">
+        </div>
+      </div>
+      <div class="sla-total-row">
+        <span class="sla-total-label">Total SLA</span>
+        <span class="sla-total-val" id="sla-sidebar-total">—</span>
+      </div>
+    </div>
+
+    <!-- Special Task Inputs -->
+    <div class="sb-section" id="specialSection">
+      <div class="sb-label">Special Task</div>
+
+      <!-- Reply-To-Yes Sub-section -->
+      <div class="sla-divider" style="margin-top:10px;"><span>Reply-To-Yes</span></div>
+      <div class="sb-input-2col">
+        <div class="sb-input-row">
+          <label for="rtyReceived">Received</label>
+          <input class="sb-input" id="rtyReceived" type="number" min="0" placeholder="0">
+        </div>
+        <div class="sb-input-row">
+          <label for="rtyTouched">SMS Touched</label>
+          <input class="sb-input" id="rtyTouched" type="number" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="sb-input-row">
+        <label for="rtyRemaining">Remaining</label>
+        <input class="sb-input" id="rtyRemaining" type="number" min="0" placeholder="0">
+      </div>
+
+      <!-- ONR Sub-section -->
+      <div class="sla-divider" style="margin-top:10px;"><span>ONR</span></div>
+      <div class="sb-input-2col">
+        <div class="sb-input-row">
+          <label for="onrHeadcount">Headcount</label>
+          <input class="sb-input" id="onrHeadcount" type="number" min="0" placeholder="0">
+        </div>
+        <div class="sb-input-row">
+          <label for="onrHours">No. of Hours</label>
+          <input class="sb-input" id="onrHours" type="number" min="0" step="0.5" placeholder="0">
+        </div>
+      </div>
+      <div class="sb-input-row">
+        <label for="onrSmsHandled">SMS Handled</label>
+        <input class="sb-input" id="onrSmsHandled" type="number" min="0" placeholder="0">
+      </div>
+    </div>
+    <!-- Overtime -->
+    <div class="sb-section" id="overtimeSection">
+      <div class="sb-label">Overtime</div>
+
+      <!-- Header row -->
+      <div class="ot-header-row">
+        <span class="ot-group-th"></span>
+        <span class="ot-col-th">Staff</span>
+        <span class="ot-col-th">OT Hrs</span>
+        <span class="ot-col-th">Productivity</span>
+      </div>
+
+      <!-- SMS row -->
+      <div class="ot-row">
+        <span class="ot-group-label">SMS</span>
+        <input class="sb-input ot-inp" id="otSmsStaff"  type="number" min="0" placeholder="0" oninput="updateOvertime()">
+        <input class="sb-input ot-inp" id="otSmsHrs"    type="number" min="0" step="0.5" placeholder="0" oninput="updateOvertime()">
+        <input class="sb-input ot-inp" id="otSmsProd"   type="number" min="0" placeholder="0" oninput="updateOvertime()">
+      </div>
+
+      <!-- Email row -->
+      <div class="ot-row">
+        <span class="ot-group-label">Email</span>
+        <input class="sb-input ot-inp" id="otEmailStaff" type="number" min="0" placeholder="0" oninput="updateOvertime()">
+        <input class="sb-input ot-inp" id="otEmailHrs"   type="number" min="0" step="0.5" placeholder="0" oninput="updateOvertime()">
+        <input class="sb-input ot-inp" id="otEmailProd"  type="number" min="0" placeholder="0" oninput="updateOvertime()">
+      </div>
+
+      <!-- Special Task row -->
+      <div class="ot-row">
+        <span class="ot-group-label">Spec. Task</span>
+        <input class="sb-input ot-inp" id="otSpStaff" type="number" min="0" placeholder="0" oninput="updateOvertime()">
+        <input class="sb-input ot-inp" id="otSpHrs"   type="number" min="0" step="0.5" placeholder="0" oninput="updateOvertime()">
+        <input class="sb-input ot-inp" id="otSpProd"  type="number" min="0" placeholder="0" oninput="updateOvertime()">
+      </div>
+    </div>
+
+    <!-- Save Day -->
+    <div class="sb-section" id="saveDaySection">
+      <div class="sb-label">Save Today's Data</div>
+      <div class="save-day-date" id="saveDayLabel">Select a date above</div>
+      <button class="act-btn primary" id="saveDayBtn" style="margin-top:8px;width:100%;" disabled>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/></svg>
+        Save Day
+      </button>
+      <div class="saved-days-list" id="savedDaysList"></div>
+    </div>
+
+    <div class="sb-spacer"></div>
+
+  </aside>
+
+  <!-- ══ WORKSPACE ══ -->
+  <main class="workspace">
+
+    <!-- Empty state -->
+    <div class="empty-state" id="emptyState">
+      <div class="big-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4zm2.5 2.1h-15V5h15v14.1zm0-16.1h-15C3.5 3 2 4.5 2 6.3V19c0 1.8 1.5 3 3.5 3h15c1.9 0 3.5-1.2 3.5-3V6.3C24 4.5 22.4 3 20.5 3z"/></svg>
+      </div>
+      <h2>No report loaded</h2>
+      <p>Upload a Disposition Code CSV to get started</p>
+    </div>
+
+    <!-- Report -->
+    <div id="reportArea">
+
+      <div id="captureZone">
+
+        <!-- ── REPORT HEADER ── -->
+        <div class="rpt-header">
+          <div class="rpt-header-inner">
+            <div>
+              <div class="rpt-title">Tenant Support &nbsp;<span class="rpt-title-accent">End of Day Report</span></div>
+              <div class="rpt-badges" id="rptBadges">
+                <span class="rpt-badge" id="rptDateBadge">Date not set</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- hidden for compat -->
+        <div id="reportTitle" style="display:none"></div>
+        <div id="totalStrip" style="display:none"></div>
+        <div id="top5Title" style="display:none"></div>
+
+        <div class="rpt-body">
+
+          <!-- ── GROUP SUMMARY KPI STRIP ── -->
+          <div class="group-kpi-strip" id="groupKpiStrip">
+
+            <!-- SMS Card -->
+            <div class="group-kpi-card">
+              <div class="group-kpi-header">
+                <span class="rpt-dot purple"></span>
+                <span class="group-kpi-title">SMS</span>
+              </div>
+              <div class="group-kpi-rows">
+                <div class="group-kpi-item">
+                  <span class="gk-label">Received</span>
+                  <span class="gk-val purple" id="gk-sms-received">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">Resolved</span>
+                  <span class="gk-val purple" id="gk-sms-resolved">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">Remaining</span>
+                  <span class="gk-val orange" id="gk-sms-remaining">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">FRT</span>
+                  <span class="gk-val muted" id="gk-sms-frt">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Email Card -->
+            <div class="group-kpi-card">
+              <div class="group-kpi-header">
+                <span class="rpt-dot orange"></span>
+                <span class="group-kpi-title">Email</span>
+              </div>
+              <div class="group-kpi-rows">
+                <div class="group-kpi-item">
+                  <span class="gk-label">Backlog</span>
+                  <span class="gk-val purple" id="gk-email-backlog">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">Closed</span>
+                  <span class="gk-val purple" id="gk-email-closed">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">Remaining</span>
+                  <span class="gk-val orange" id="gk-email-remaining">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">SLA %</span>
+                  <span class="gk-val muted" id="gk-email-sla">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- RTY Card -->
+            <div class="group-kpi-card">
+              <div class="group-kpi-header">
+                <span class="rpt-dot purple"></span>
+                <span class="group-kpi-title">Reply-To-Yes</span>
+              </div>
+              <div class="group-kpi-rows">
+                <div class="group-kpi-item">
+                  <span class="gk-label">Received</span>
+                  <span class="gk-val purple" id="gk-sp-received">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">SMS Touched</span>
+                  <span class="gk-val purple" id="gk-sp-touched">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">Remaining</span>
+                  <span class="gk-val orange" id="gk-sp-remaining">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ONR Card -->
+            <div class="group-kpi-card">
+              <div class="group-kpi-header">
+                <span class="rpt-dot orange"></span>
+                <span class="group-kpi-title">ONR</span>
+              </div>
+              <div class="group-kpi-rows">
+                <div class="group-kpi-item">
+                  <span class="gk-label">Headcount</span>
+                  <span class="gk-val purple" id="gk-onr-headcount">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">No. of Hours</span>
+                  <span class="gk-val orange" id="gk-onr-hours">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">SMS Handled</span>
+                  <span class="gk-val purple" id="gk-onr-sms">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Attendance Card -->
+            <div class="group-kpi-card">
+              <div class="group-kpi-header">
+                <span class="rpt-dot orange"></span>
+                <span class="group-kpi-title">Attendance</span>
+              </div>
+              <div class="group-kpi-rows">
+                <div class="group-kpi-item">
+                  <span class="gk-label">Present</span>
+                  <span class="gk-val purple" id="gk-att-present">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">Expected</span>
+                  <span class="gk-val purple" id="gk-att-expected">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">Leave</span>
+                  <span class="gk-val orange" id="gk-att-leave">—</span>
+                </div>
+                <div class="group-kpi-item">
+                  <span class="gk-label">Rest Day</span>
+                  <span class="gk-val muted" id="gk-att-rest">—</span>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /group-kpi-strip -->
+
+          <!-- ── ATTENDANCE + OVERTIME side by side ── -->
+          <div class="rpt-2col-row">
+
+            <!-- Attendance -->
+            <div class="rpt-section-card">
+              <div class="rpt-section-header">
+                <span class="rpt-dot purple"></span>
+                <span class="rpt-section-label">Headcount &amp; Attendance</span>
+              </div>
+              <table class="rpt-table">
+                <thead><tr>
+                  <th>Group</th><th>Present</th><th>Expected</th><th>Leave</th><th>Rest Day</th>
+                </tr></thead>
+                <tbody>
+                  <tr><td>SMS</td>
+                    <td><span class="att-val empty" id="disp-att-sms-pres">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-sms-exp">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-sms-leave">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-sms-rest">—</span></td>
+                  </tr>
+                  <tr><td>Email</td>
+                    <td><span class="att-val empty" id="disp-att-email-pres">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-email-exp">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-email-leave">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-email-rest">—</span></td>
+                  </tr>
+                  <tr><td>Special Task</td>
+                    <td><span class="att-val empty" id="disp-att-sp-pres">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-sp-exp">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-sp-leave">—</span></td>
+                    <td><span class="att-val empty" id="disp-att-sp-rest">—</span></td>
+                  </tr>
+                  <tr class="rpt-total-row"><td>TOTAL</td>
+                    <td><span id="disp-att-tot-pres">—</span></td>
+                    <td><span id="disp-att-tot-exp">—</span></td>
+                    <td><span id="disp-att-tot-leave">—</span></td>
+                    <td><span id="disp-att-tot-rest">—</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Overtime -->
+            <div class="rpt-section-card">
+              <div class="rpt-section-header">
+                <span class="rpt-dot orange"></span>
+                <span class="rpt-section-label">Overtime</span>
+              </div>
+              <table class="rpt-table">
+                <thead><tr>
+                  <th>Group</th><th>Staff Count</th><th>OT Hours</th><th>Productivity</th>
+                </tr></thead>
+                <tbody>
+                  <tr><td>SMS</td>
+                    <td><span class="att-val empty" id="disp-ot-sms-staff">—</span></td>
+                    <td><span class="att-val empty" id="disp-ot-sms-hrs">—</span></td>
+                    <td><span class="att-val empty" id="disp-ot-sms-prod">—</span></td>
+                  </tr>
+                  <tr><td>Email</td>
+                    <td><span class="att-val empty" id="disp-ot-email-staff">—</span></td>
+                    <td><span class="att-val empty" id="disp-ot-email-hrs">—</span></td>
+                    <td><span class="att-val empty" id="disp-ot-email-prod">—</span></td>
+                  </tr>
+                  <tr><td>Special Task</td>
+                    <td><span class="att-val empty" id="disp-ot-sp-staff">—</span></td>
+                    <td><span class="att-val empty" id="disp-ot-sp-hrs">—</span></td>
+                    <td><span class="att-val empty" id="disp-ot-sp-prod">—</span></td>
+                  </tr>
+                  <tr class="rpt-total-row"><td>TOTAL</td>
+                    <td><span id="disp-ot-tot-staff">—</span></td>
+                    <td><span id="disp-ot-tot-hrs">—</span></td>
+                    <td><span id="disp-ot-tot-prod">—</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div><!-- /2col-row -->
+
+          <!-- ── SMS PERFORMANCE TABLE ── -->
+          <div class="rpt-section-card" id="smsMetricsCard">
+            <div class="rpt-section-header">
+              <span class="rpt-dot purple"></span>
+              <span class="rpt-section-label">SMS Performance</span>
+              <span class="rpt-type-badge purple">SMS</span>
+            </div>
+            <div style="overflow-x:auto;" id="smsMetricsTable">
+              <p style="font-size:11px;color:var(--muted);padding:8px 0;">Upload CSV to see daily breakdown.</p>
+            </div>
+          </div>
+
+          <!-- ── EMAIL PERFORMANCE TABLE ── -->
+          <div class="rpt-section-card" id="emailMetricsCard">
+            <div class="rpt-section-header">
+              <span class="rpt-dot orange"></span>
+              <span class="rpt-section-label">Email Performance</span>
+              <span class="rpt-type-badge orange">Email</span>
+            </div>
+            <div style="overflow-x:auto;" id="emailMetricsTable">
+              <p style="font-size:11px;color:var(--muted);padding:8px 0;">Upload CSV to see daily breakdown.</p>
+            </div>
+            <div class="rpt-subsection-label" style="margin-top:12px;">Service Level Agreement</div>
+            <div style="overflow-x:auto;" id="emailSlaTable">
+              <p style="font-size:11px;color:var(--muted);padding:8px 0;">Upload CSV to see daily breakdown.</p>
+            </div>
+          </div>
+
+          <!-- ── SPECIAL TASK TABLE ── -->
+          <div class="rpt-section-card" id="specialMetricsCard">
+            <div class="rpt-section-header">
+              <span class="rpt-dot purple"></span>
+              <span class="rpt-section-label">Special Task</span>
+              <span class="rpt-type-badge purple">Special Task</span>
+            </div>
+            <!-- RTY + ONR side by side -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+              <div>
+                <div class="rpt-subsection-label" style="margin-bottom:8px;">Reply-To-Yes</div>
+                <div style="overflow-x:auto;" id="rtyMetricsTable">
+                  <p style="font-size:11px;color:var(--muted);padding:8px 0;">No saved data yet.</p>
+                </div>
+              </div>
+              <div>
+                <div class="rpt-subsection-label" style="margin-bottom:8px;">ONR</div>
+                <div style="overflow-x:auto;" id="onrMetricsTable">
+                  <p style="font-size:11px;color:var(--muted);padding:8px 0;">No saved data yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- ── TOP 5 + TREND in one row ── -->
+          <div class="rpt-section-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;">
+            <div class="top5-trend-row" style="flex:1;">
+
+              <!-- Left: Top 5 vertical list -->
+              <div class="top5-col">
+                <div class="rpt-section-header" style="padding:12px 12px 6px; gap:6px;">
+                  <span class="rpt-dot purple"></span>
+                  <span id="top5TitleInner" style="font-size:13px;font-weight:800;color:var(--text);line-height:1.3;">Top 5 Disposition Codes</span>
+                </div>
+                <div id="top5Grid" class="top5-vert"></div>
+              </div>
+
+              <!-- Right: Trend chart -->
+              <div class="trend-col">
+                <div style="padding:12px 14px 4px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <span class="rpt-dot orange"></span>
+                  <span style="font-size:13px;font-weight:700;color:var(--text);">Past 5 Days Trend</span>
+                </div>
+                <div style="padding:6px 14px 4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                  <div class="chart-legend" id="chartLegend"></div>
+                </div>
+                <p id="chartSubtitle" style="font-size:10px;color:var(--muted);padding:0 14px 6px;"></p>
+                <div class="chart-padding">
+                  <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── DAILY BREAKDOWN TABLE ── -->
+          <div class="rpt-section-card">
+            <div class="rpt-section-header">
+              <span class="rpt-dot purple"></span>
+              <span class="rpt-section-label">All Disposition Codes — Daily Breakdown</span>
+            </div>
+            <p id="tableSubtitle" style="font-size:11px;color:var(--muted);margin:6px 0 10px;">Ranked by weekly total</p>
+            <div style="overflow-x:auto;">
+              <table id="summaryTable">
+                <thead><tr id="tableHead"><th>#</th><th>Disposition Code</th><th>% of Week</th></tr></thead>
+                <tbody id="tableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div><!-- /rpt-body -->
+
+          <!-- ── AUTO-ANALYSIS (inside capture zone, buttons hidden on export) ── -->
+          <div class="analysis-bar" id="analysisBar">
+            <div class="analysis-title-row" style="margin-bottom:10px;">
+              <span class="rpt-dot purple"></span>
+              <span class="analysis-title">EOD Insights</span>
+              <div id="analysisBtns" style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+                <span class="analysis-hint" id="analysisHint">AI-generated · click to edit</span>
+                <button class="analysis-gen-btn" id="analysisGenBtn" onclick="generateAnalysis()">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V15a1 1 0 0 0-2 0v1.93A6 6 0 0 1 6.07 13H8a1 1 0 0 0 0-2H6.07A6 6 0 0 1 11 6.07V8a1 1 0 0 0 2 0V6.07A6 6 0 0 1 17.93 11H16a1 1 0 0 0 0 2h1.93A6 6 0 0 1 13 16.93z"/></svg>
+                  Generate
+                </button>
+              </div>
+            </div>
+            <div class="analysis-body" id="analysisBody" contenteditable="true" spellcheck="true">
+              <p class="analysis-placeholder">Click <strong>Generate</strong> to auto-analyze today's metrics — then edit as needed.</p>
+            </div>
+            <div class="analysis-footer" id="analysisFooter">
+              <span class="analysis-footer-note" id="analysisStatus">Not yet generated</span>
+            </div>
+          </div>
+
+          <!-- ── REPORT FOOTER ── -->
+          <div class="capture-footer" id="captureFooter" style="display:none;">
+            Tenant Support EOD Report · <span id="subjectDate2">—</span> · Workforce Management Team
+          </div>
+
+      </div><!-- /captureZone -->
+
+      <!-- Subject Line — excluded from image export -->
+      <div class="subject-line-bar" id="subjectBar">
+        <div class="subject-line-meta" id="subjectMeta">Tenant Support EOD Report · <span id="subjectDate">—</span> · Workforce Management Team</div>
+        <div class="subject-line-card">
+          <div class="subject-line-label">
+            Copy-Friendly Subject Line
+            <span class="subject-line-hint">Use this as your email subject or message header</span>
+          </div>
+          <div class="subject-line-row">
+            <div class="subject-line-text" id="subjectLineText">Tenant Support End-of-Day Report | —</div>
+            <button class="subject-copy-btn" onclick="copySubjectLine()">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+              Copy
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /reportArea -->
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+  <span id="toastMsg">Done</span>
+</div>
+
+<!-- Spinner -->
+<div class="spinner-overlay" id="spinner"><div class="spinner"></div></div>
+
+<script>
+const COLORS = ['#5000b3','#FF6400','#00b4d8','#f72585','#2dc653'];
+const CSV_COLS = { src: 'Conversation Source Type', code: 'Disposition Code', date: 'Conversation Date' };
+
+let globalData = [];
+let chartInstance = null;
+let allWeeks = {};
+let globalDayMap = {};
+let currentWkKey = null;
+let currentActiveDk = null;
+let currentSorted = [];
+let currentWeek = null;
+let currentWeekDays = [];
+
+// Google Sheets backend
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwGCfn61kyVdwClJcTLCTig9zMHbrcbedqXNAZvTZstUMN0CDx2oAH_c4EATDvcRwq3/exec';
+let metricsCache = {};
+let cacheLoaded = false;
+
+// ── GAS URL SETUP ──
+// URL is hardcoded above — nothing to configure
+
+// ── UPLOAD ──
+const dropZone = document.getElementById('dropZone');
+const csvInput = document.getElementById('csvInput');
+
+// Set today as default report date
+(function() {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth()+1).padStart(2,'0');
+  const d = String(today.getDate()).padStart(2,'0');
+  document.getElementById('reportDate').value = `${y}-${m}-${d}`;
+  updateReportDate();
+  updateSaveDayUI();
+  updateSubjectLine();
+})();
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0]; if (f) processFile(f);
+});
+csvInput.addEventListener('change', () => { if (csvInput.files[0]) processFile(csvInput.files[0]); });
+
+function processFile(file) {
+  Papa.parse(file, {
+    header: true, skipEmptyLines: true,
+    complete: results => {
+      const rows = results.data;
+      const sms = rows.filter(r => (r[CSV_COLS.src] || '').trim().toUpperCase() === 'SMS');
+      if (!sms.length) { alert('No SMS rows found. Check column: "Conversation Source Type"'); return; }
+
+      globalData = sms.map(r => {
+        const raw = (r[CSV_COLS.date] || '').trim();
+        const parts = raw.split('/');
+        let d = null;
+        if (parts.length === 3) d = new Date(+parts[2], +parts[1]-1, +parts[0]);
+        return { code: (r[CSV_COLS.code] || 'Unknown').trim(), date: d };
+      }).filter(r => r.date && !isNaN(r.date));
+
+      // Update upload card
+      dropZone.classList.add('loaded');
+      document.getElementById('fileName').textContent = file.name;
+
+      // Meta
+      document.getElementById('mSms').textContent = globalData.length.toLocaleString();
+      document.getElementById('mTotal').textContent = rows.length.toLocaleString();
+      const sdates = [...globalData].sort((a,b)=>a.date-b.date);
+      document.getElementById('mRange').textContent = `${fmt(sdates[0].date)} – ${fmt(sdates[sdates.length-1].date)}`;
+      document.getElementById('metaSection').style.display = '';
+
+      // Build maps
+      globalDayMap = {};
+      globalData.forEach(r => {
+        const dk = toKey(r.date);
+        if (!globalDayMap[dk]) globalDayMap[dk] = [];
+        globalDayMap[dk].push(r);
+      });
+      allWeeks = buildWeeks(globalData);
+
+      document.getElementById('weekSection').style.display = '';
+      document.getElementById('chipSection').style.display = '';
+
+      // Auto-load saved metrics from Google Sheets, then build week view
+      loadAllFromSheet().then(() => populateWeekSelect(allWeeks));
+    },
+    error: () => alert('Error parsing CSV.')
+  });
+}
+
+// ── DATE UTILS ──
+function fmt(d) { return d.toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' }); }
+function fmtShort(d) { return d.toLocaleDateString('en-AU', { weekday:'short', day:'2-digit', month:'short' }); }
+function toKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+function buildWeeks(data) {
+  const weeks = {};
+  data.forEach(r => {
+    const d = r.date;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - ((d.getDay()+6)%7));
+    monday.setHours(0,0,0,0);
+    const wk = toKey(monday);
+    if (!weeks[wk]) weeks[wk] = { monday, days: {} };
+    const dk = toKey(d);
+    if (!weeks[wk].days[dk]) weeks[wk].days[dk] = [];
+    weeks[wk].days[dk].push(r);
+  });
+  return weeks;
+}
+
+function populateWeekSelect(weeks) {
+  const sel = document.getElementById('weekSelect');
+  const wkKeys = Object.keys(weeks).sort().reverse();
+  sel.innerHTML = wkKeys.map(k => {
+    const { monday } = weeks[k];
+    const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+    return `<option value="${k}">${fmt(monday)} – ${fmt(sunday)}</option>`;
+  }).join('');
+  sel.onchange = () => loadWeek(sel.value);
+  loadWeek(wkKeys[0]);
+}
+
+function loadWeek(wkKey) {
+  currentWkKey = wkKey;
+  const week = allWeeks[wkKey];
+  if (!week) return;
+  const weekDays = Object.keys(week.days).sort();
+
+  // Chips
+  const chips = document.getElementById('dateChips');
+  chips.innerHTML = weekDays.map(dk => {
+    const d = new Date(dk+'T00:00:00');
+    const total = week.days[dk].length;
+    return `<div class="day-chip" data-dk="${dk}" onclick="selectDate('${dk}','${wkKey}')">${fmtShort(d)}<span class="chip-vol">${total}</span></div>`;
+  }).join('');
+
+  const lastDay = weekDays[weekDays.length-1];
+  selectDate(lastDay, wkKey);
+}
+
+function selectDate(dk, wkKey) {
+  currentActiveDk = dk;
+  document.querySelectorAll('.day-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.day-chip[data-dk="${dk}"]`)?.classList.add('active');
+
+  const week = allWeeks[wkKey];
+  const weekDays = Object.keys(week.days).sort();
+  currentWeek = week;
+  currentWeekDays = weekDays;
+
+  // Show Save Day section and load today's saved data if exists
+  const saveDayBtn = document.getElementById('saveDayBtn');
+  if (saveDayBtn) saveDayBtn.disabled = false;
+  loadSidebarMetrics(dk);
+  updateSaveDayUI();
+
+  const weekRows = weekDays.flatMap(d => week.days[d] || []);
+  renderReport(weekRows, week, weekDays, dk, wkKey);
+}
+
+function renderReport(weekRows, week, weekDays, activeDk, wkKey) {
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('reportArea').classList.add('visible');
+
+  const totalSMS = weekRows.length;
+  const allCodes = countBy(weekRows, 'code');
+
+  // Top 5 based on the report day — use reportDate picker, fall back to activeDk
+  const reportDate = document.getElementById('reportDate').value; // YYYY-MM-DD
+  const dayRows = (reportDate && globalDayMap[reportDate])
+    ? globalDayMap[reportDate]
+    : (week.days[activeDk] || []);
+  const dayCodes = countBy(dayRows, 'code');
+  const dayTotal = dayRows.length;
+  const top5codes = Object.entries(dayCodes).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const top5Names = top5codes.map(([c])=>c);
+
+  const usedDk = (reportDate && globalDayMap[reportDate]) ? reportDate : activeDk;
+
+  const wkStart = new Date(weekDays[0]+'T00:00:00');
+  const wkEnd   = new Date(weekDays[weekDays.length-1]+'T00:00:00');
+  const wkLabel = `${fmt(wkStart)} – ${fmt(wkEnd)}`;
+
+  // Header
+  document.getElementById('rptBadges').innerHTML =
+    `<span class="rpt-badge" id="rptDateBadge">${getReportDateLabel()}</span><span class="rpt-badge">${wkLabel}</span>`;
+
+  // (totals displayed via KPI cards, not strip)
+
+  // Find the preceding weekday (Mon–Fri) before usedDk
+  function getPrevWeekday(dk) {
+    const d = new Date(dk + 'T00:00:00');
+    do {
+      d.setDate(d.getDate() - 1);
+    } while (d.getDay() === 0 || d.getDay() === 6); // skip Sun(0) and Sat(6)
+    return toKey(d);
+  }
+  const prevDisposDk = globalDayMap[usedDk] ? getPrevWeekday(usedDk) : null;
+  const prevDisposRows = prevDisposDk ? (globalDayMap[prevDisposDk] || []) : [];
+  const prevDisposCodes = countBy(prevDisposRows, 'code');
+  const prevDisposTotal = prevDisposRows.length;
+  const prevDayLabel = prevDisposDk
+    ? new Date(prevDisposDk+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',day:'2-digit',month:'short'})
+    : null;
+
+  // Top 5 section title
+  const top5TitleEl = document.getElementById('top5TitleInner');
+  const dayLabel = new Date(usedDk+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+  if (top5TitleEl) top5TitleEl.textContent = `Top 5 Disposition Codes — ${dayLabel}`;
+
+  document.getElementById('top5Grid').innerHTML = top5codes.map(([code,cnt],i)=>{
+    const pct = dayTotal ? ((cnt/dayTotal)*100).toFixed(1) : 0;
+    const prevCnt = prevDisposCodes[code] || 0;
+    const diff = cnt - prevCnt;
+    let indHtml = '';
+    if (prevDisposDk && prevCnt > 0) {
+      const up = diff > 0, same = diff === 0;
+      const cls = same ? 'ind-same' : up ? 'ind-up' : 'ind-dn';
+      const arrow = same ? '→' : up ? '▲' : '▼';
+      indHtml = same
+        ? `<span class="${cls}" title="vs ${prevDayLabel}">→ —</span>`
+        : `<span class="${cls}" title="vs ${prevDayLabel}">${arrow} ${Math.abs(diff)} vs ${prevDayLabel}</span>`;
+    }
+    return `<div class="top5-card">
+      <div class="rank-badge">${i+1}</div>
+      <div class="accent-bar"></div>
+      <div class="count">${cnt}</div>
+      ${indHtml ? `<div class="top5-ind">${indHtml}</div>` : ''}
+      <div class="label">${code}</div>
+      <div class="pct-row">
+        <div class="pct-bar-wrap"><div class="pct-bar" style="width:${pct}%"></div></div>
+        <span class="pct-text">${pct}%</span>
+      </div>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);font-size:13px;padding:20px">No data for selected date.</div>';
+
+  // Chart — all codes stacked bar
+  const allCodesSorted = Object.entries(allCodes).sort((a,b)=>b[1]-a[1]);
+  renderTrendChart(allCodesSorted, activeDk);
+
+  // Table
+  const sorted = Object.entries(allCodes).sort((a,b)=>b[1]-a[1]);
+  currentSorted = sorted;
+  const dayHeaders = weekDays.map(dk=>{
+    const d = new Date(dk+'T00:00:00');
+    const isActive = dk===activeDk;
+    return `<th style="${isActive?'color:var(--purple);':''}">${fmtShort(d)}</th>`;
+  }).join('');
+  document.getElementById('tableHead').innerHTML = `<th>#</th><th>Disposition Code</th>${dayHeaders}<th>% of Week</th>`;
+
+  document.getElementById('tableBody').innerHTML = sorted.map(([code,weekTotal],i)=>{
+    const colIdx = top5Names.indexOf(code);
+    const dot = colIdx>=0
+      ? `<span class="code-dot" style="background:${COLORS[colIdx]}"></span>`
+      : `<span class="code-dot" style="background:#ccc"></span>`;
+    const dayCells = weekDays.map(dk=>{
+      const cnt = (week.days[dk]||[]).filter(r=>r.code===code).length;
+      const isActive = dk===activeDk;
+      return `<td style="${isActive?'background:#f4f0ff;font-weight:800;color:var(--purple);':''}">${cnt>0?cnt:'<span style="color:#ccc">—</span>'}</td>`;
+    }).join('');
+    const pct = totalSMS?((weekTotal/totalSMS)*100).toFixed(1):'0.0';
+    return `<tr>
+      <td class="rank-num">${i+1}</td>
+      <td><span class="code-pill">${dot}${code}</span></td>
+      ${dayCells}
+      <td style="font-weight:800;color:var(--purple);">${pct}%</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tableSubtitle').textContent = `${sorted.length} disposition codes · ${wkLabel}`;
+
+  // Always reload from sheet to ensure latest data including previous days
+  loadAllFromSheet().then(() => renderMetricsTables());
+}
+
+function renderTrendChart(allCodesSorted, activeDk) {
+  // Past 5 days window
+  const allDays = Object.keys(globalDayMap).sort();
+  const activePos = allDays.indexOf(activeDk);
+  const days = allDays.slice(Math.max(0, activePos - 4), activePos + 1);
+  const labels = days.map(dk => fmtShort(new Date(dk + 'T00:00:00')));
+
+  // Top 5 codes only
+  const PALETTE = ['#5000b3','#FF6400','#00b4d8','#f72585','#2dc653'];
+  const top5 = allCodesSorted.slice(0, 5);
+
+  const datasets = top5.map(([code], i) => ({
+    label: code,
+    data: days.map(dk => (globalDayMap[dk] || []).filter(r => r.code === code).length),
+    borderColor: PALETTE[i],
+    backgroundColor: PALETTE[i] + '22',
+    borderWidth: 2.5,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension: 0.3,
+    fill: false,
+  }));
+
+  if (chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(document.getElementById('trendChart').getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1028',
+          titleColor: '#fff',
+          bodyColor: '#e0d8f0',
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: { label: item => ` ${item.dataset.label}: ${item.raw}` }
+        },
+        datalabels: { display: false }
+      },
+      scales: {
+        x: { grid: { color: '#e2dff0' }, ticks: { font: { size: 10, weight: '600' }, color: '#6b5f82' } },
+        y: { beginAtZero: true, grid: { color: '#e2dff0' }, ticks: { font: { size: 10 }, color: '#6b5f82' } }
+      }
+    }
+  });
+
+  document.getElementById('chartLegend').innerHTML = top5.map(([name], i) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${PALETTE[i]}"></div>${name}</div>`
+  ).join('');
+
+  document.getElementById('chartSubtitle').textContent =
+    `Top 5 codes · Past ${days.length} day${days.length > 1 ? 's' : ''} (${labels.join(' → ')})`;
+}
+
+// ── EXPORT POPUP ──
+function toggleExportMenu() {
+  const menu = document.getElementById('rptExportMenu');
+  menu.classList.toggle('open');
+}
+// Close on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.rpt-export-wrap')) {
+    document.getElementById('rptExportMenu')?.classList.remove('open');
+  }
+});
+
+async function doExportImage(action) {
+  document.getElementById('rptExportMenu').classList.remove('open');
+  const zone = document.getElementById('captureZone');
+  if (!zone) return;
+  document.getElementById('spinner').classList.add('show');
+
+  // Show footer, hide UI-only elements during capture
+  const captureFooter = document.getElementById('captureFooter');
+  if (captureFooter) captureFooter.style.display = '';
+  const workspace = document.querySelector('.workspace');
+  const prevOverflow = workspace ? workspace.style.overflowY : '';
+  const prevHeight = workspace ? workspace.style.height : '';
+  if (workspace) {
+    workspace.style.overflowY = 'visible';
+    workspace.style.height = 'auto';
+    workspace.scrollTop = 0;
+  }
+  const toHide = ['analysisBtns','analysisFooter','analysisHint'];
+  toHide.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.visibility = 'hidden';
+  });
+  const analysisBody = document.getElementById('analysisBody');
+  const prevBorder = analysisBody ? analysisBody.style.border : '';
+  const prevOutline = analysisBody ? analysisBody.style.outline : '';
+  if (analysisBody) { analysisBody.style.border = 'none'; analysisBody.style.outline = 'none'; }
+
+  // Scroll to top so header is in frame, wait for paint
+  if (workspace) workspace.scrollTop = 0;
+  await new Promise(r => setTimeout(r, 120));
+
+  try {
+    const canvas = await html2canvas(zone, {
+      backgroundColor: '#f4f3f8', scale: 2, useCORS: true, logging: false,
+      scrollX: 0, scrollY: -window.scrollY,
+      windowWidth: zone.scrollWidth, windowHeight: zone.scrollHeight
+    });
+
+    // Restore hidden elements
+    toHide.forEach(id => { const el = document.getElementById(id); if (el) el.style.visibility = ''; });
+    if (captureFooter) captureFooter.style.display = 'none';
+    if (workspace) { workspace.style.overflowY = prevOverflow; workspace.style.height = prevHeight; }
+    if (analysisBody) { analysisBody.style.border = prevBorder; analysisBody.style.outline = prevOutline; }
+
+    if (action === 'copy') {
+      canvas.toBlob(async blob => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+          showToast('Image copied to clipboard!');
+        } catch {
+          showToast('Copy not supported — downloading instead');
+          downloadBlob(blob);
+        }
+        document.getElementById('spinner').classList.remove('show');
+      });
+    } else {
+      canvas.toBlob(blob => {
+        downloadBlob(blob);
+        showToast('Image downloaded!');
+        document.getElementById('spinner').classList.remove('show');
+      });
+    }
+  } catch(e) {
+    toHide.forEach(id => { const el = document.getElementById(id); if (el) el.style.visibility = ''; });
+    if (captureFooter) captureFooter.style.display = 'none';
+    if (workspace) { workspace.style.overflowY = prevOverflow; workspace.style.height = prevHeight; }
+    if (analysisBody) { analysisBody.style.border = prevBorder; analysisBody.style.outline = prevOutline; }
+    document.getElementById('spinner').classList.remove('show');
+    showToast('Export failed');
+  }
+}
+
+function downloadBlob(blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `TS_EOD_Report_${new Date().toISOString().slice(0,10)}.png`;
+  a.click();
+}
+
+document.getElementById('rptCopyBtn').addEventListener('click', () => doExportImage('copy'));
+document.getElementById('rptDownloadBtn').addEventListener('click', () => doExportImage('download'));
+
+// ── EXPORT CSV ──
+function exportCSV() {
+  if (!currentSorted.length) { showToast('Upload a CSV first'); return; }
+  const week = currentWeek, weekDays = currentWeekDays, wkKey = currentWkKey;
+  const allRows = weekDays.flatMap(dk=>week.days[dk]||[]);
+  const total = allRows.length;
+  const dayLabels = weekDays.map(dk=>fmtShort(new Date(dk+'T00:00:00')));
+  const header = ['Rank','Disposition Code',...dayLabels,'% of Week'].join(',') + '\n';
+  const rows = currentSorted.map(([code,wkTotal],i)=>{
+    const counts = weekDays.map(dk=>(week.days[dk]||[]).filter(r=>r.code===code).length);
+    const pct = total?((wkTotal/total)*100).toFixed(1)+'%':'0.0%';
+    return `${i+1},"${code}",${counts.join(',')},${pct}`;
+  }).join('\n');
+  const blob = new Blob([header+rows],{type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `TS_Disposition_Week_${wkKey}.csv`; a.click();
+  showToast('CSV exported');
+}
+
+// ── RESET ──
+function doReset() {
+  globalData=[]; allWeeks={}; globalDayMap={}; currentSorted=[];
+  currentWkKey=null; currentActiveDk=null; currentWeek=null; currentWeekDays=[];
+  if (chartInstance) { chartInstance.destroy(); chartInstance=null; }
+  dropZone.classList.remove('loaded');
+  document.getElementById('fileName').textContent = '';
+  csvInput.value = '';
+  ['attSmsPres','attSmsExp','attSmsLeave','attSmsRest',
+   'attEmailPres','attEmailExp','attEmailLeave','attEmailRest',
+   'attSpPres','attSpExp','attSpLeave','attSpRest',
+   'otSmsStaff','otSmsHrs','otSmsProd',
+   'otEmailStaff','otEmailHrs','otEmailProd',
+   'otSpStaff','otSpHrs','otSpProd'].forEach(id=>{
+    document.getElementById(id).value='';
+  });
+  resetMetricsData();
+  clearSidebarInputs();
+  updateSaveDayUI();
+  updateAttendance();
+  updateOvertime();
+  ['metaSection','weekSection','chipSection'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('reportArea').classList.remove('visible');
+  document.getElementById('emptyState').style.display = '';
+}
+
+document.getElementById('resetBtnHeader').addEventListener('click', doReset);
+
+// ── TOAST ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+// ── KPI DISPLAY HELPER ──
+function setKpi(id, val, opts = {}) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const { orange = false, small = false, suffix = '' } = opts;
+  const colorClass = orange ? 'orange' : '';
+  const sizeClass = small ? 'sm-small' : '';
+  const cls = `rpt-kpi-val ${colorClass} ${sizeClass}`.trim();
+  if (!val && val !== 0) {
+    el.innerHTML = `<span class="kpi-empty-bar"></span>`;
+    el.className = cls;
+  } else {
+    el.textContent = suffix ? `${val}${suffix}` : val;
+    el.className = cls;
+  }
+}
+
+// ── ATTENDANCE ──
+function updateAttendance() {
+  const groups = [
+    { key: 'sms',   ids: ['attSmsPres',   'attSmsExp',   'attSmsLeave',   'attSmsRest']   },
+    { key: 'email', ids: ['attEmailPres',  'attEmailExp',  'attEmailLeave',  'attEmailRest']  },
+    { key: 'sp',    ids: ['attSpPres',     'attSpExp',     'attSpLeave',     'attSpRest']     },
+  ];
+  const cols = ['pres','exp','leave','rest'];
+  const totals = [0,0,0,0];
+
+  groups.forEach(({ key, ids }) => {
+    ids.forEach((id, i) => {
+      const val = parseInt(document.getElementById(id).value) || 0;
+      const dispId = `disp-att-${key}-${cols[i]}`;
+      const el = document.getElementById(dispId);
+      if (val === 0) {
+        el.textContent = '—'; el.className = 'att-val empty';
+      } else {
+        el.textContent = val; el.className = 'att-val';
+      }
+      totals[i] += val;
+    });
+  });
+
+  // Totals row
+  const totIds = ['disp-att-tot-pres','disp-att-tot-exp','disp-att-tot-leave','disp-att-tot-rest'];
+  totIds.forEach((id, i) => {
+    document.getElementById(id).textContent = totals[i] > 0 ? totals[i] : '—';
+  });
+  updateGroupKpis();
+}
+
+// ── OVERTIME ──
+function updateOvertime() {
+  const groups = [
+    { key: 'sms',   ids: ['otSmsStaff',   'otSmsHrs',   'otSmsProd']   },
+    { key: 'email', ids: ['otEmailStaff',  'otEmailHrs',  'otEmailProd']  },
+    { key: 'sp',    ids: ['otSpStaff',     'otSpHrs',     'otSpProd']     },
+  ];
+  const cols = ['staff','hrs','prod'];
+  const totals = [0, 0, 0];
+
+  groups.forEach(({ key, ids }) => {
+    ids.forEach((id, i) => {
+      const raw = document.getElementById(id).value.trim();
+      const val = parseFloat(raw) || 0;
+      const dispId = `disp-ot-${key}-${cols[i]}`;
+      const el = document.getElementById(dispId);
+      if (val === 0) {
+        el.textContent = '—'; el.className = 'att-val empty';
+      } else {
+        // OT Hours: show decimal if not whole
+        el.textContent = cols[i] === 'hrs'
+          ? (val % 1 === 0 ? val : val.toFixed(1))
+          : val.toLocaleString();
+        el.className = 'att-val';
+      }
+      totals[i] += val;
+    });
+  });
+
+  // Totals row
+  const totIds = ['disp-ot-tot-staff','disp-ot-tot-hrs','disp-ot-tot-prod'];
+  totIds.forEach((id, i) => {
+    const t = totals[i];
+    document.getElementById(id).textContent = t > 0
+      ? (i === 1 && t % 1 !== 0 ? t.toFixed(1) : t.toLocaleString())
+      : '—';
+  });
+}
+
+
+
+
+// ── DAY METRICS STORAGE (Google Sheets via Apps Script) ──
+
+async function gasRequest(payload) {
+  if (!GAS_URL) throw new Error('NO_URL');
+
+  const body = 'payload=' + encodeURIComponent(JSON.stringify(payload));
+
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body,
+    redirect: 'follow'
+  });
+
+  const text = await res.text();
+
+  if (text.trim().startsWith('<')) {
+    throw new Error('GAS returned HTML — check deployment settings (Execute as: Me, Access: Anyone)');
+  }
+
+  return JSON.parse(text);
+}
+
+async function loadAllFromSheet() {
+  if (!GAS_URL) return;
+  showSaveBtnState('loading');
+  try {
+    const res = await gasRequest({ action: 'getAll' });
+    if (res.ok) {
+      const raw = res.data || {};
+      const normalized = {};
+      Object.entries(raw).forEach(([key, val]) => {
+        let dk = null;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+          dk = key; // already correct YYYY-MM-DD
+        } else {
+          const d = new Date(key);
+          if (!isNaN(d.getTime())) {
+            // Use local date string to avoid UTC timezone shift
+            const y = d.getFullYear();
+            const m = String(d.getMonth()+1).padStart(2,'0');
+            const day = String(d.getDate()).padStart(2,'0');
+            dk = `${y}-${m}-${day}`;
+          }
+        }
+        if (dk) normalized[dk] = val;
+      });
+      metricsCache = normalized;
+      cacheLoaded = true;
+    }
+  } catch(e) {
+    console.warn('Sheet load failed:', e);
+  }
+  showSaveBtnState('idle');
+}
+
+async function saveDayToSheet(dk, data) {
+  if (!GAS_URL) {
+    showToast('⚠ No Apps Script URL set — configure in Settings');
+    return false;
+  }
+  showSaveBtnState('saving');
+  try {
+    const res = await gasRequest({ action: 'saveDay', date: dk, data });
+    if (res.ok) {
+      metricsCache[dk] = data;
+      showSaveBtnState('saved');
+      setTimeout(() => showSaveBtnState('idle'), 2000);
+      return true;
+    }
+    throw new Error(res.error || 'Save failed');
+  } catch(e) {
+    showSaveBtnState('error');
+    setTimeout(() => showSaveBtnState('idle'), 3000);
+    showToast('❌ Save failed — check your Apps Script URL');
+    return false;
+  }
+}
+
+async function deleteDayFromSheet(dk) {
+  delete metricsCache[dk];
+  if (!GAS_URL) return;
+  try { await gasRequest({ action: 'deleteDay', date: dk }); } catch(e) { console.warn(e); }
+}
+
+function getAllSavedMetrics() { return metricsCache; }
+function getMetricsForDate(dk) { return metricsCache[dk] || null; }
+
+function showSaveBtnState(state) {
+  const btn = document.getElementById('saveDayBtn');
+  if (!btn) return;
+  const states = {
+    idle:    { text: 'Save Day',   cls: 'primary' },
+    saving:  { text: 'Saving…',   cls: 'ghost'   },
+    saved:   { text: '✓ Saved',   cls: 'success-btn' },
+    loading: { text: 'Loading…',  cls: 'ghost'   },
+    error:   { text: '✗ Failed',  cls: 'error-btn'   },
+  };
+  const s = states[state] || states.idle;
+  btn.innerHTML = s.text;
+  btn.className = `act-btn ${s.cls}`;
+  btn.disabled = state === 'saving' || state === 'loading';
+}
+
+function readSidebarMetrics() {
+  const frtM = parseInt(document.getElementById('smsFRTm').value)||0;
+  const frtS = parseInt(document.getElementById('smsFRTs').value)||0;
+  const trtM = parseInt(document.getElementById('smsTRTm').value)||0;
+  const trtS = parseInt(document.getElementById('smsTRTs').value)||0;
+  const breached = parseInt(document.getElementById('emailBreached').value)||0;
+  const achieved = parseInt(document.getElementById('emailAchieved').value)||0;
+  return {
+    sms: {
+      received:  document.getElementById('smsReceived').value,
+      resolved:  document.getElementById('smsResolved').value,
+      remaining: document.getElementById('smsRemaining').value,
+      assigned:  document.getElementById('smsAssigned').value,
+      frt: frtM > 0 || frtS > 0 ? `${frtM}:${frtS}` : '',
+      trt: trtM > 0 || trtS > 0 ? `${trtM}:${trtS}` : '',
+    },
+    email: {
+      backlog:   document.getElementById('emailBacklog').value,
+      closed:    document.getElementById('emailClosed').value,
+      remaining: document.getElementById('emailRemaining').value,
+      pending:   document.getElementById('emailPending').value,
+      tickets:   document.getElementById('emailTickets').value,
+      slapct:    document.getElementById('emailSLApct').value,
+      breached:  document.getElementById('emailBreached').value,
+      achieved:  document.getElementById('emailAchieved').value,
+      slatotal:  breached + achieved > 0 ? String(breached + achieved) : '',
+    },
+    special: {
+      rtyReceived:  document.getElementById('rtyReceived').value,
+      rtyTouched:   document.getElementById('rtyTouched').value,
+      rtyRemaining: document.getElementById('rtyRemaining').value,
+      onrHeadcount: document.getElementById('onrHeadcount').value,
+      onrHours:     document.getElementById('onrHours').value,
+      onrSms:       document.getElementById('onrSmsHandled').value,
+    }
+  };
+}
+
+function loadSidebarMetrics(dk) {
+  const data = getMetricsForDate(dk);
+  if (!data) { clearSidebarInputs(); return; }
+  const s = data.sms || {};
+  const e = data.email || {};
+  const sp = data.special || {};
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  setVal('smsReceived', s.received); setVal('smsResolved', s.resolved);
+  setVal('smsRemaining', s.remaining); setVal('smsAssigned', s.assigned);
+  const [fm, fs] = (s.frt||'').split(':'); setVal('smsFRTm', fm||''); setVal('smsFRTs', fs||'');
+  const [tm, ts] = (s.trt||'').split(':'); setVal('smsTRTm', tm||''); setVal('smsTRTs', ts||'');
+  setVal('emailBacklog', e.backlog); setVal('emailClosed', e.closed);
+  setVal('emailRemaining', e.remaining); setVal('emailPending', e.pending);
+  setVal('emailTickets', e.tickets); setVal('emailSLApct', e.slapct);
+  setVal('emailBreached', e.breached); setVal('emailAchieved', e.achieved);
+  const slaEl = document.getElementById('sla-sidebar-total');
+  if (slaEl) slaEl.textContent = e.slatotal || '—';
+  setVal('rtyReceived',   sp.rtyReceived); setVal('rtyTouched',     sp.rtyTouched);
+  setVal('rtyRemaining',  sp.rtyRemaining);
+  setVal('onrHeadcount',  sp.onrHeadcount);setVal('onrHours',       sp.onrHours);
+  setVal('onrSmsHandled', sp.onrSms);
+}
+
+function clearSidebarInputs() {
+  ['smsReceived','smsResolved','smsRemaining','smsAssigned',
+   'smsFRTm','smsFRTs','smsTRTm','smsTRTs',
+   'emailBacklog','emailClosed','emailRemaining','emailPending','emailTickets',
+   'emailSLApct','emailBreached','emailAchieved',
+   'rtyReceived','rtyTouched','rtyRemaining',
+   'onrHeadcount','onrHours','onrSmsHandled'
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const slaEl = document.getElementById('sla-sidebar-total');
+  if (slaEl) slaEl.textContent = '—';
+}
+
+function updateSaveDayUI() {
+  const dk = document.getElementById('reportDate')?.value;
+  const labelEl = document.getElementById('saveDayLabel');
+  const btn = document.getElementById('saveDayBtn');
+
+  if (!dk) {
+    if (labelEl) labelEl.textContent = 'Set the Report Date above';
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (btn) btn.disabled = false;
+  const d = new Date(dk+'T00:00:00');
+  if (labelEl) labelEl.textContent = d.toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  // List saved days from the same Mon–Sun week as the report date
+  const all = getAllSavedMetrics();
+  const wkMonday = getMonday(dk);
+  const weekKeys = Object.keys(all)
+    .filter(d => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+      return getMonday(d) === wkMonday;
+    })
+    .sort();
+  const list = document.getElementById('savedDaysList');
+  if (!list) return;
+  if (!weekKeys.length) {
+    list.innerHTML = '<p style="font-size:10px;color:var(--muted);margin-top:4px;">No saved days this week.</p>';
+    return;
+  }
+  list.innerHTML = weekKeys.map(wdk => {
+    const wd = new Date(wdk+'T00:00:00');
+    const lbl = wd.toLocaleDateString('en-AU',{weekday:'short',day:'2-digit',month:'short'});
+    const isToday = wdk === dk;
+    return `<div class="saved-day-pill">
+      <span class="sdp-date" style="${isToday?'color:var(--orange);':''}">${lbl}${isToday?' ★':''}</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="sdp-load" onclick="loadSidebarMetrics('${wdk}');showToast('Loaded ${lbl}');">Load</button>
+        <button class="sdp-del" title="Delete" onclick="deleteDayFromSheet('${wdk}').then(()=>{renderMetricsTables();updateSaveDayUI();showToast('Deleted ${lbl}');})">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Save Day button
+document.getElementById('saveDayBtn').addEventListener('click', async () => {
+  const dk = document.getElementById('reportDate').value;
+  if (!dk) { showToast('Set the Report Date first'); return; }
+  const data = readSidebarMetrics();
+  const ok = await saveDayToSheet(dk, data);
+  if (ok) {
+    metricsCache[dk] = data;
+    renderMetricsTables();
+    updateSaveDayUI();
+    const d = new Date(dk+'T00:00:00');
+    showToast(`✓ Saved: ${d.toLocaleDateString('en-AU',{weekday:'short',day:'2-digit',month:'short',year:'numeric'})}`);
+  }
+});
+
+// ── METRICS TABLE RENDERER ──
+const SMS_FIELDS = [
+  { key: 'received',  label: 'Received',            color: 'purple' },
+  { key: 'resolved',  label: 'Resolved',             color: 'purple' },
+  { key: 'remaining', label: 'Remaining',            color: 'purple' },
+  { key: 'assigned',  label: 'Assigned',             color: 'purple' },
+  { key: 'frt',       label: 'First Response Time',  color: 'orange', time: true },
+  { key: 'trt',       label: 'Total Resolved Time',  color: 'orange', time: true },
+];
+const EMAIL_FIELDS = [
+  { key: 'backlog',   label: 'Opening Backlog',  color: 'purple' },
+  { key: 'closed',    label: 'Closed',           color: 'purple' },
+  { key: 'remaining', label: 'Remaining',        color: 'purple' },
+  { key: 'pending',   label: 'Pending',          color: 'purple' },
+  { key: 'tickets',   label: 'Tickets Handled',  color: 'purple' },
+];
+const EMAIL_SLA_FIELDS = [
+  { key: 'slapct',   label: 'SLA %',         color: 'orange', pct: true },
+  { key: 'breached', label: 'Breached SLA',  color: 'orange' },
+  { key: 'achieved', label: 'Achieved SLA',  color: 'orange' },
+  { key: 'slatotal', label: 'Total SLA',     color: 'orange', total: true },
+];
+const SPECIAL_FIELDS = [
+  { key: 'received',  label: 'Received',    color: 'purple' },
+  { key: 'touched',   label: 'SMS Touched', color: 'purple' },
+  { key: 'remaining', label: 'Remaining',   color: 'orange' },
+];
+const RTY_FIELDS = [
+  { key: 'rtyReceived',  label: 'Received',    color: 'purple' },
+  { key: 'rtyTouched',   label: 'SMS Touched', color: 'purple' },
+  { key: 'rtyRemaining', label: 'Remaining',   color: 'orange' },
+];
+const ONR_FIELDS = [
+  { key: 'onrHeadcount', label: 'Headcount',    color: 'purple' },
+  { key: 'onrHours',     label: 'No. of Hours', color: 'orange', hrs: true },
+  { key: 'onrSms',       label: 'SMS Handled',  color: 'purple' },
+];
+
+function renderMetricsTables() {
+  if (!currentWeekDays.length) return;
+
+  const all = getAllSavedMetrics();
+  const refMonday = getMonday(currentWeekDays[0]);
+
+  // Strictly same Mon–Sun week only
+  const savedDays = Object.keys(all).filter(dk => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return false;
+    return getMonday(dk) === refMonday;
+  });
+
+  const days = [...new Set([...currentWeekDays, ...savedDays])].sort();
+
+  renderDayTable('smsMetricsTable',   days, all, 'sms',     SMS_FIELDS);
+  renderDayTable('emailMetricsTable', days, all, 'email',   EMAIL_FIELDS);
+  renderDayTable('emailSlaTable',     days, all, 'email',   EMAIL_SLA_FIELDS);
+  renderDayTable('rtyMetricsTable',   days, all, 'special', RTY_FIELDS);
+  renderDayTable('onrMetricsTable',   days, all, 'special', ONR_FIELDS);
+  updateGroupKpis();
+}
+
+function getMonday(dk) {
+  if (!dk) return null;
+  const d = new Date(dk + 'T00:00:00');
+  if (isNaN(d.getTime())) return null;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  return toKey(monday);
+}
+
+// ── COMPARISON INDICATOR ──
+// Returns HTML badge comparing current vs previous value
+// field type determines format: time, pct, hrs, or raw number
+// For "lower is better" fields (remaining, pending, breached, frt, trt) invert color logic
+const LOWER_IS_BETTER = new Set(['remaining','pending','breached','frt','trt','occupant','rtyRemaining','onrHours']);
+
+function toSeconds(timeStr) {
+  if (!timeStr) return null;
+  const [m, s] = timeStr.split(':');
+  return (parseInt(m)||0)*60 + (parseInt(s)||0);
+}
+
+function buildIndicator(field, curRaw, prevRaw) {
+  if (!curRaw || !prevRaw) return '';
+  if (curRaw === prevRaw) return `<span class="ind-same">→ —</span>`;
+
+  const lib = LOWER_IS_BETTER.has(field.key);
+  let diff = 0, display = '', pct = 0;
+
+  if (field.time) {
+    const cur = toSeconds(curRaw), prev = toSeconds(prevRaw);
+    if (cur === null || prev === null) return '';
+    diff = cur - prev;
+    const absDiff = Math.abs(diff);
+    const dm = Math.floor(absDiff/60), ds = absDiff%60;
+    display = dm > 0 ? `${dm}m ${ds}s` : `${ds}s`;
+  } else if (field.pct) {
+    const cur = parseFloat(curRaw), prev = parseFloat(prevRaw);
+    diff = cur - prev;
+    display = `${Math.abs(diff).toFixed(1)}%`;
+  } else if (field.hrs) {
+    const cur = parseFloat(curRaw), prev = parseFloat(prevRaw);
+    diff = cur - prev;
+    const n = Math.abs(diff);
+    display = `${n%1===0?n:n.toFixed(1)}h`;
+  } else {
+    const cur = parseFloat(curRaw), prev = parseFloat(prevRaw);
+    if (isNaN(cur) || isNaN(prev)) return '';
+    diff = cur - prev;
+    pct = prev !== 0 ? ((diff/prev)*100) : 0;
+    display = `${Math.abs(diff).toLocaleString()}`;
+  }
+
+  if (diff === 0) return `<span class="ind-same">→ —</span>`;
+
+  const up = diff > 0;
+  // Good = green, bad = red
+  const good = lib ? !up : up;
+  const cls = good ? 'ind-up' : 'ind-dn';
+  const arrow = up ? '▲' : '▼';
+  return `<span class="${cls}">${arrow} ${display}</span>`;
+}
+
+function renderDayTable(containerId, days, all, section, fields) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const hasData = days.some(dk => all[dk]?.[section]);
+  if (!hasData) {
+    container.innerHTML = '<p style="font-size:11px;color:var(--muted);padding:6px 0;">No saved data yet — fill in the sidebar and click Save Day.</p>';
+    return;
+  }
+
+  let html = `<table class="rpt-table" style="min-width:200px;"><thead><tr><th style="text-align:left;">Metric</th>`;
+  days.forEach(dk => {
+    const isActive = dk === currentActiveDk;
+    const d = new Date(dk+'T00:00:00');
+    const lbl = fmtShort(d);
+    const hasSaved = !!all[dk]?.[section];
+    html += `<th style="${isActive?'color:var(--purple);':''} ${!hasSaved?'opacity:.35;':''}">${lbl}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+
+  fields.forEach(f => {
+    const isTotal = f.total;
+    html += `<tr${isTotal?' class="rpt-total-row"':''}>`;
+    html += `<td style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;">${f.label}</td>`;
+    days.forEach((dk, i) => {
+      const dayData = all[dk]?.[section] || {};
+      const raw = dayData[f.key] || '';
+      // Find preceding weekday for comparison
+      let prevDk = null;
+      if (i > 0) {
+        const d = new Date(dk + 'T00:00:00');
+        const candidate = new Date(d);
+        do { candidate.setDate(candidate.getDate() - 1); } while (candidate.getDay() === 0 || candidate.getDay() === 6);
+        const candidateDk = toKey(candidate);
+        // Use it if it exists in our days array or in saved data
+        prevDk = days.includes(candidateDk) ? candidateDk : (all[candidateDk] ? candidateDk : days[i-1]);
+      }
+      const prevRaw = prevDk ? (all[prevDk]?.[section]?.[f.key] || '') : '';
+      const isActive = dk === currentActiveDk;
+      let display = '—';
+      let valueStyle = 'color:var(--muted);opacity:.4;';
+      if (raw && raw !== '0' && raw !== '0:0') {
+        valueStyle = f.color === 'orange' ? 'color:var(--orange);font-weight:800;' : 'color:var(--purple);font-weight:800;';
+        if (f.time) {
+          const [m, s] = raw.split(':');
+          const mi = parseInt(m)||0, si = parseInt(s)||0;
+          display = mi > 0 ? `${mi}m ${si}s` : (si > 0 ? `${si}s` : '—');
+        } else if (f.pct) {
+          display = `${parseFloat(raw).toFixed(1)}%`;
+        } else if (f.hrs) {
+          const n = parseFloat(raw);
+          display = n ? `${n%1===0?n:n.toFixed(1)} hrs` : '—';
+        } else {
+          display = Number(raw).toLocaleString();
+        }
+      }
+      // Only show indicator on days that have both current and previous data
+      const indicator = (raw && prevRaw && i > 0) ? buildIndicator(f, raw, prevRaw) : '';
+      const bg = isActive ? 'background:#f4f0ff;' : '';
+      html += `<td style="${bg}${valueStyle}">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;">
+          <span>${display}</span>
+          ${indicator}
+        </div>
+      </td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  container.innerHTML = html;
+}
+
+function resetMetricsData() {
+  clearSidebarInputs();
+  ['smsMetricsTable','emailMetricsTable','emailSlaTable',
+   'specialMetricsTable','rtyMetricsTable','onrMetricsTable'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<p style="font-size:11px;color:var(--muted);padding:8px 0;">Upload CSV to see daily breakdown.</p>';
+  });
+}
+
+// ── REPORT DATE ──
+function getReportDateLabel() {
+  const val = document.getElementById('reportDate').value;
+  if (!val) return 'Date not set';
+  const d = new Date(val + 'T00:00:00');
+  return d.toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+function updateReportDate() {
+  const badge = document.getElementById('rptDateBadge');
+  if (badge) badge.textContent = getReportDateLabel();
+  updateSaveDayUI();
+  updateSubjectLine();
+  updateGroupKpis();
+  // Re-render top5 based on new report date if report is already loaded
+  if (currentWeekDays.length && currentWeek) {
+    const weekRows = currentWeekDays.flatMap(d => currentWeek.days[d] || []);
+    renderReport(weekRows, currentWeek, currentWeekDays, currentActiveDk, currentWkKey);
+  }
+}
+
+function updateSubjectLine() {
+  const bar = document.getElementById('subjectBar');
+  if (!bar) return;
+  const dateVal = document.getElementById('reportDate').value;
+  const d = dateVal ? new Date(dateVal + 'T00:00:00') : null;
+  const dateStr = d && !isNaN(d)
+    ? d.toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+    : '—';
+  const shortDate = d && !isNaN(d)
+    ? d.toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+    : '—';
+
+  const subjectText = `Workforce End-of-Day Report (Tenant Support) | ${dateStr}`;
+  const el = document.getElementById('subjectLineText');
+  const meta = document.getElementById('subjectDate');
+  const meta2 = document.getElementById('subjectDate2');
+  if (el) el.textContent = subjectText;
+  if (meta) meta.textContent = shortDate;
+  if (meta2) meta2.textContent = shortDate;
+}
+
+function copySubjectLine() {
+  const text = document.getElementById('subjectLineText')?.textContent || '';
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Subject line copied!');
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('Subject line copied!');
+  });
+}
+
+function updateGroupKpis() {
+  const dk = document.getElementById('reportDate').value;
+  const all = getAllSavedMetrics();
+  const saved = dk && all[dk] ? all[dk] : null;
+
+  // Find the preceding weekday from saved data
+  function getPrevWeekday(dk) {
+    const d = new Date(dk + 'T00:00:00');
+    do { d.setDate(d.getDate() - 1); } while (d.getDay() === 0 || d.getDay() === 6);
+    return toKey(d);
+  }
+  const prevDk = dk ? getPrevWeekday(dk) : null;
+  const prev = prevDk && all[prevDk] ? all[prevDk] : null;
+
+  function gk(id, val, cls = 'purple', indHtml = '') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!val || val === '0' || val === '') {
+      el.innerHTML = '—'; el.className = 'gk-val empty';
+    } else {
+      el.className = `gk-val ${cls}`;
+      el.innerHTML = `${val}${indHtml ? `<span class="gk-ind">${indHtml}</span>` : ''}`;
+    }
+  }
+
+  function ind(field, curRaw, prevRaw) {
+    return buildIndicator(field, curRaw, prevRaw);
+  }
+
+  // SMS
+  const sms = saved?.sms || {}, psms = prev?.sms || {};
+  gk('gk-sms-received',  sms.received  ? Number(sms.received).toLocaleString()  : '', 'purple', ind({key:'received'}, sms.received, psms.received));
+  gk('gk-sms-resolved',  sms.resolved  ? Number(sms.resolved).toLocaleString()  : '', 'purple', ind({key:'resolved'}, sms.resolved, psms.resolved));
+  gk('gk-sms-remaining', sms.remaining ? Number(sms.remaining).toLocaleString() : '', 'orange', ind({key:'remaining'}, sms.remaining, psms.remaining));
+  const frtParts = (sms.frt||'').split(':');
+  const frtM = parseInt(frtParts[0])||0, frtS = parseInt(frtParts[1])||0;
+  gk('gk-sms-frt', frtM||frtS ? (frtM > 0 ? `${frtM}m ${frtS}s` : `${frtS}s`) : '', 'muted', ind({key:'frt',time:true}, sms.frt, psms.frt));
+
+  // Email
+  const email = saved?.email || {}, pemail = prev?.email || {};
+  gk('gk-email-backlog',   email.backlog   ? Number(email.backlog).toLocaleString()   : '', 'purple', ind({key:'backlog'},   email.backlog,   pemail.backlog));
+  gk('gk-email-closed',    email.closed    ? Number(email.closed).toLocaleString()    : '', 'purple', ind({key:'closed'},    email.closed,    pemail.closed));
+  gk('gk-email-remaining', email.remaining ? Number(email.remaining).toLocaleString() : '', 'orange', ind({key:'remaining'}, email.remaining, pemail.remaining));
+  gk('gk-email-sla',       email.slapct    ? `${parseFloat(email.slapct).toFixed(1)}%` : '', 'muted', ind({key:'slapct',pct:true}, email.slapct, pemail.slapct));
+
+  // Special Task
+  // RTY
+  const sp = saved?.special || {}, psp = prev?.special || {};
+  gk('gk-sp-received',  sp.rtyReceived  ? Number(sp.rtyReceived).toLocaleString()  : '', 'purple', ind({key:'rtyReceived'},  sp.rtyReceived,  psp.rtyReceived));
+  gk('gk-sp-touched',   sp.rtyTouched   ? Number(sp.rtyTouched).toLocaleString()   : '', 'purple', ind({key:'rtyTouched'},   sp.rtyTouched,   psp.rtyTouched));
+  gk('gk-sp-remaining', sp.rtyRemaining ? Number(sp.rtyRemaining).toLocaleString() : '', 'orange', ind({key:'rtyRemaining'}, sp.rtyRemaining,  psp.rtyRemaining));
+
+  // ONR
+  gk('gk-onr-headcount', sp.onrHeadcount ? Number(sp.onrHeadcount).toLocaleString() : '', 'purple', ind({key:'onrHeadcount'}, sp.onrHeadcount, psp.onrHeadcount));
+  const onrH = sp.onrHours ? parseFloat(sp.onrHours) : 0;
+  gk('gk-onr-hours', onrH ? `${onrH%1===0?onrH:onrH.toFixed(1)} hrs` : '', 'orange', ind({key:'onrHours',hrs:true}, sp.onrHours, psp.onrHours));
+  gk('gk-onr-sms', sp.onrSms ? Number(sp.onrSms).toLocaleString() : '', 'purple', ind({key:'onrSms'}, sp.onrSms, psp.onrSms));
+
+  // Attendance
+  const attIds = [
+    ['attSmsPres','attEmailPres','attSpPres'],
+    ['attSmsExp','attEmailExp','attSpExp'],
+    ['attSmsLeave','attEmailLeave','attSpLeave'],
+    ['attSmsRest','attEmailRest','attSpRest'],
+  ];
+  const attTargets = ['gk-att-present','gk-att-expected','gk-att-leave','gk-att-rest'];
+  const attCls = ['purple','purple','orange','muted'];
+  attIds.forEach((ids, i) => {
+    const total = ids.reduce((sum, id) => sum + (parseInt(document.getElementById(id)?.value)||0), 0);
+    gk(attTargets[i], total > 0 ? total : '', attCls[i]);
+  });
+}
+
+// ── EOD INSIGHTS (fully offline, no API) ──
+function generateAnalysis() {
+  const btn = document.getElementById('analysisGenBtn');
+  const body = document.getElementById('analysisBody');
+  const status = document.getElementById('analysisStatus');
+
+  const dk = document.getElementById('reportDate').value;
+  if (!dk) { showToast('Set the Report Date first'); return; }
+
+  const all = getAllSavedMetrics();
+  const saved = all[dk];
+  if (!saved) { showToast('Save today\'s metrics first'); return; }
+
+  const d = new Date(dk + 'T00:00:00');
+  const dateLabel = d.toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  const s  = saved.sms   || {};
+  const e  = saved.email || {};
+  const sp = saved.special || {};
+
+  const prevD = new Date(d);
+  do { prevD.setDate(prevD.getDate()-1); } while (prevD.getDay()===0||prevD.getDay()===6);
+  const prevDk = toKey(prevD);
+  const prev = all[prevDk] || {};
+  const ps = prev.sms || {}, pe = prev.email || {}, psp = prev.special || {};
+  const prevLabel = prevD.toLocaleDateString('en-AU',{weekday:'long'});
+
+  const n = v => parseInt(v)||0;
+  const fmtTime = t => {
+    if (!t) return 'N/A';
+    const [m,sec] = (t||'0:0').split(':');
+    return (parseInt(m)||0)>0 ? `${m}m ${sec}s` : `${sec}s`;
+  };
+  const trend = (cur, prv, lowerBetter=false) => {
+    const c = n(cur), p = n(prv);
+    if (!p || c === p) return '';
+    const diff = c - p, absPct = Math.abs(((diff/p)*100)).toFixed(1);
+    const up = diff > 0, good = lowerBetter ? !up : up;
+    return ` (${up?'up':'down'} ${Math.abs(diff)} or ${absPct}% vs ${prevLabel}${good?', a positive movement':', which warrants attention'})`;
+  };
+
+  const smsRec = n(s.received), smsRes = n(s.resolved), smsRem = n(s.remaining);
+  const smsRate = smsRec > 0 ? ((smsRes/smsRec)*100).toFixed(1) : 0;
+  const smsPara = `On ${dateLabel}, the SMS channel received ${smsRec.toLocaleString()} messages${trend(s.received,ps.received)}. The team resolved ${smsRes.toLocaleString()} conversations at a ${smsRate}% resolution rate${trend(s.resolved,ps.resolved)}, with ${smsRem.toLocaleString()} conversations remaining at end of day${trend(s.remaining,ps.remaining,true)}. First Response Time was recorded at ${fmtTime(s.frt)} and Total Resolved Time at ${fmtTime(s.trt)}.`;
+
+  const eBack = n(e.backlog), eClosed = n(e.closed), eRem = n(e.remaining);
+  const eSla = e.slapct ? parseFloat(e.slapct).toFixed(1) : null;
+  const emailPara = `On the Email channel, the day began with a backlog of ${eBack.toLocaleString()} tickets${trend(e.backlog,pe.backlog,true)}. The team closed ${eClosed.toLocaleString()} tickets${trend(e.closed,pe.closed)}, leaving ${eRem.toLocaleString()} unresolved at day's end${trend(e.remaining,pe.remaining,true)}.${eSla ? ` SLA compliance was ${eSla}%${trend(e.slapct,pe.slapct)}, with ${n(e.achieved)} tickets within SLA and ${n(e.breached)} breached out of ${n(e.slatotal)} total.` : ''}`;
+
+  const rtyRec = n(sp.rtyReceived), rtyTch = n(sp.rtyTouched), rtyRem = n(sp.rtyRemaining);
+  const onrHC = n(sp.onrHeadcount), onrHrs = parseFloat(sp.onrHours||0), onrSms = n(sp.onrSms);
+  const spPara = `For Special Task, the Reply-To-Yes team received ${rtyRec.toLocaleString()} tasks${trend(sp.rtyReceived,psp.rtyReceived)} and touched ${rtyTch.toLocaleString()} SMS${trend(sp.rtyTouched,psp.rtyTouched)}, with ${rtyRem.toLocaleString()} items remaining${trend(sp.rtyRemaining,psp.rtyRemaining,true)}. The ONR team deployed ${onrHC} staff across ${onrHrs>0?`${onrHrs%1===0?onrHrs:onrHrs.toFixed(1)} hours`:'the day'} and handled ${onrSms.toLocaleString()} SMS conversations${trend(sp.onrSms,psp.onrSms)}.`;
+
+  const flags = [];
+  if (smsRec > 0 && smsRem > smsRes) flags.push('SMS backlog exceeds resolved volume — consider queue prioritization for the next shift');
+  if (eSla && parseFloat(e.slapct) < 80) flags.push(`Email SLA at ${eSla}% is below the 80% threshold — escalation review recommended`);
+  if (rtyRec > 0 && rtyRem > rtyRec) flags.push('RTY remaining exceeds received — review task assignment and capacity');
+  const closingPara = flags.length
+    ? `Operational notes for the next shift: ${flags.join('; ')}.`
+    : `Overall, the Tenant Support team maintained stable operations across all channels today. No critical flags identified for the incoming shift.`;
+
+  body.innerHTML = [smsPara, emailPara, spPara, closingPara].map(p => `<p>${p}</p>`).join('');
+  const now = new Date().toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' });
+  status.textContent = `Generated at ${now} · Click text above to edit`;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V15a1 1 0 0 0-2 0v1.93A6 6 0 0 1 6.07 13H8a1 1 0 0 0 0-2H6.07A6 6 0 0 1 11 6.07V8a1 1 0 0 0 2 0V6.07A6 6 0 0 1 17.93 11H16a1 1 0 0 0 0 2h1.93A6 6 0 0 1 13 16.93z"/></svg> Regenerate`;
+}
+
+function updateSlaTotalLive() {
+  const b = parseInt(document.getElementById('emailBreached').value) || 0;
+  const a = parseInt(document.getElementById('emailAchieved').value) || 0;
+  const el = document.getElementById('sla-sidebar-total');
+  if (el) el.textContent = (b + a) > 0 ? (b + a) : '—';
+}
+
+function countBy(arr, key) {
+  return arr.reduce((acc,r)=>{ acc[r[key]]=(acc[r[key]]||0)+1; return acc; },{});
+}
+
+// ── AUTO-LOAD ON PAGE OPEN ──
+(async function onPageLoad() {
+  await loadAllFromSheet();
+  refreshSavedWeeksSelector();
+  updateSaveDayUI();
+  updateGroupKpis();
+})();
+
+function refreshSavedWeeksSelector() {
+  const all = getAllSavedMetrics();
+  const dates = Object.keys(all)
+    .filter(dk => {
+      // Only accept YYYY-MM-DD format
+      const d = new Date(dk + 'T00:00:00');
+      return /^\d{4}-\d{2}-\d{2}$/.test(dk) && !isNaN(d.getTime());
+    })
+    .sort().reverse();
+
+  if (!dates.length) return;
+
+  // Group into weeks
+  const weeks = {};
+  dates.forEach(dk => {
+    const wk = getMonday(dk);
+    if (!wk) return;
+    if (!weeks[wk]) weeks[wk] = { monday: new Date(wk+'T00:00:00'), days: [] };
+    weeks[wk].days.push(dk);
+  });
+
+  let sel = document.getElementById('savedWeeksSection');
+  if (!sel) {
+    sel = document.createElement('div');
+    sel.id = 'savedWeeksSection';
+    sel.className = 'sb-section';
+    const saveSec = document.getElementById('saveDaySection');
+    saveSec.parentNode.insertBefore(sel, saveSec);
+  }
+
+  const wkKeys = Object.keys(weeks).sort().reverse();
+  sel.innerHTML = `
+    <div class="sb-label">Saved Weeks</div>
+    <select class="sb-select" id="savedWeekSelect" onchange="loadSavedWeek(this.value)">
+      <option value="">— Select a week —</option>
+      ${wkKeys.map(wk => {
+        const { monday, days } = weeks[wk];
+        const sun = new Date(monday); sun.setDate(monday.getDate() + 6);
+        return `<option value="${wk}">${fmt(monday)} – ${fmt(sun)} (${days.length} day${days.length > 1 ? 's' : ''})</option>`;
+      }).join('')}
+    </select>`;
+}
+
+function loadSavedWeek(wkKey) {
+  if (!wkKey) return;
+  const all = getAllSavedMetrics();
+
+  // Get all saved days that belong to this week
+  const weekDays = Object.keys(all)
+    .filter(dk => getMonday(dk) === wkKey)
+    .sort();
+
+  if (!weekDays.length) return;
+
+  // Fill in the full Mon–Sun skeleton so empty days still show as columns
+  const monday = new Date(wkKey+'T00:00:00');
+  const fullWeek = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const dk = toKey(d);
+    // Only include days up to and including the last saved day
+    if (dk <= weekDays[weekDays.length-1]) fullWeek.push(dk);
+  }
+
+  currentWeekDays = fullWeek.length ? fullWeek : weekDays;
+  currentActiveDk = weekDays[weekDays.length-1];
+
+  renderMetricsTables();
+  updateSaveDayUI();
+  loadSidebarMetrics(currentActiveDk);
+
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('reportArea').classList.add('visible');
+
+  const wkStart = new Date(currentWeekDays[0]+'T00:00:00');
+  const wkEnd   = new Date(currentActiveDk+'T00:00:00');
+  const wkLabel = `${fmt(wkStart)} – ${fmt(wkEnd)}`;
+  document.getElementById('rptBadges').innerHTML =
+    `<span class="rpt-badge" id="rptDateBadge">${getReportDateLabel()}</span><span class="rpt-badge">${wkLabel}</span>`;
+
+  showToast(`Loaded ${weekDays.length} saved day${weekDays.length>1?'s':''}`);
+}
+</script>
+</body>
+</html>
